@@ -4,7 +4,7 @@
     <strong>Real-time AI voice conversations in Discord — powered by OpenAI Realtime API</strong>
   </p>
   <p align="center">
-    <a href="https://github.com/digitalforgeca/vox-discord/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+    <a href="https://github.com/webwicz/vox-discord/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
     <a href="https://nodejs.org"><img src="https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg" alt="Node.js >= 18"></a>
     <a href="https://www.npmjs.com/package/@digitalforgestudios/vox-discord"><img src="https://img.shields.io/npm/v/@digitalforgestudios/vox-discord.svg?color=cb3837" alt="npm version"></a>
     <a href="https://discord.js.org"><img src="https://img.shields.io/badge/discord.js-v14-5865F2.svg?logo=discord&logoColor=white" alt="discord.js v14"></a>
@@ -85,7 +85,7 @@ https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot&permissions
 ### 3. Install & Run
 
 ```bash
-git clone https://github.com/digitalforgeca/vox-discord.git
+git clone https://github.com/webwicz/vox-discord.git
 cd vox-discord
 npm install
 cp .env.example .env

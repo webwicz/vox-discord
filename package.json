@@ -22,7 +22,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/digitalforgeca/vox-discord.git"
+    "url": "https://github.com/webwicz/vox-discord.git"
   },
   "homepage": "https://dforge.ca",
   "dependencies": {
