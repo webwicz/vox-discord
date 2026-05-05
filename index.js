@@ -15,6 +15,7 @@ const {
   entersState,
 } = require('@discordjs/voice');
 const { OpusEncoder } = require('@discordjs/opus');
+const { opus } = require('prism-media');
 const WebSocket = require('ws');
 const { Transform, PassThrough, Readable } = require('stream');
 const { toolDefinitions, executeTool, setDiscordClient } = require('./tools');
@@ -82,12 +83,15 @@ class RealtimeBridge {
   }
 
   async connect() {
-    const url = `${REALTIME_ENDPOINT}?api-version=2025-04-01-preview&deployment=${REALTIME_MODEL}`;
+    const url = `${REALTIME_ENDPOINT}?model=${REALTIME_MODEL}`;
     console.log(`[realtime] Connecting to ${url}`);
 
     return new Promise((resolve, reject) => {
       this.ws = new WebSocket(url, {
-        headers: { 'api-key': REALTIME_API_KEY },
+        headers: {
+          'Authorization': `Bearer ${REALTIME_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
       });
 
       this.ws.on('open', () => {
@@ -109,6 +113,16 @@ class RealtimeBridge {
       this.ws.on('close', (code, reason) => {
         console.log(`[realtime] WebSocket closed: ${code} ${reason}`);
         this.connected = false;
+
+        // Auto-reconnect unless it's a clean close (code 1000)
+        if (code !== 1000) {
+          console.log('[realtime] Attempting to reconnect in 5 seconds...');
+          setTimeout(() => {
+            this.connect().catch(err => {
+              console.error('[realtime] Reconnection failed:', err.message);
+            });
+          }, 5000);
+        }
       });
     });
   }
@@ -120,14 +134,16 @@ class RealtimeBridge {
         this.configureSession();
         break;
       case 'session.updated':
-        console.log('[realtime] Session configured');
+        console.log('[realtime] Session configured successfully');
         break;
       case 'response.audio.delta':
+      case 'response.output_audio.delta':
         if (this.onAudioDelta) {
           this.onAudioDelta(event.delta);
         }
         break;
       case 'response.audio_transcript.delta':
+      case 'response.output_text.delta':
         if (event.delta) {
           process.stdout.write(`[AI] ${event.delta}`);
         }
@@ -147,8 +163,8 @@ class RealtimeBridge {
         }
         break;
       case 'response.function_call_arguments.done':
-        // Also handle via this event for reliability
-        console.log(`[tool] Function call: ${event.name}(${event.arguments})`);
+        // Handle function call from xAI
+        this.handleFunctionCallFromEvent(event);
         break;
       case 'input_audio_buffer.speech_started':
         console.log('[vad] Speech started');
@@ -156,9 +172,28 @@ class RealtimeBridge {
       case 'input_audio_buffer.speech_stopped':
         console.log('[vad] Speech stopped');
         break;
+      case 'ping':
+        // Handle ping events from xAI
+        this.ws.send(JSON.stringify({ type: 'pong' }));
+        break;
       case 'error':
         console.error('[realtime] Error:', event.error?.message || JSON.stringify(event.error));
         break;
+      case 'conversation.created':
+        console.log('[realtime] Conversation created');
+        this.configureSession();
+        break;
+      case 'response.created':
+        console.log('[realtime] Response created');
+        break;
+      case 'response.output_item.added':
+        console.log('[realtime] Output item added');
+        break;
+      case 'response.output_item.done':
+        console.log('[realtime] Output item done');
+        break;
+      default:
+        console.log(`[realtime] Unhandled event: ${event.type}`);
     }
   }
 
@@ -194,45 +229,69 @@ class RealtimeBridge {
     }));
   }
 
+  async handleFunctionCallFromEvent(event) {
+    const { name, arguments: argsStr, call_id } = event;
+    console.log(`[tool] Executing function call: ${name} (call_id: ${call_id})`);
+
+    let args = {};
+    try {
+      args = JSON.parse(argsStr);
+    } catch (e) {
+      console.error('[tool] Failed to parse arguments:', argsStr);
+      args = {};
+    }
+
+    // Execute the tool
+    const result = await executeTool(name, args);
+    console.log(`[tool] Result (${result.length} chars): ${result.substring(0, 200)}...`);
+
+    // Send the result back to the model
+    this.ws.send(JSON.stringify({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: call_id,
+        output: result,
+      },
+    }));
+
+    // Trigger the model to generate a response with the tool result
+    this.ws.send(JSON.stringify({
+      type: 'response.create',
+    }));
+  }
+
   configureSession() {
     // Build turn detection config based on VAD type
     let turn_detection;
     if (VOX_VAD_TYPE === 'off') {
       turn_detection = null;
-    } else if (VOX_VAD_TYPE === 'semantic_vad') {
-      turn_detection = {
-        type: 'semantic_vad',
-        eagerness: VOX_EAGERNESS,
-        create_response: VOX_CREATE_RESPONSE,
-      };
-      console.log(`[config] semantic_vad — eagerness: ${VOX_EAGERNESS}`);
     } else {
+      // x.ai uses server_vad for all VAD types
       turn_detection = {
         type: 'server_vad',
-        threshold: VOX_THRESHOLD,
-        prefix_padding_ms: VOX_PREFIX_PADDING,
-        silence_duration_ms: VOX_SILENCE_DURATION,
         create_response: VOX_CREATE_RESPONSE,
       };
-      console.log(`[config] server_vad — threshold: ${VOX_THRESHOLD}, silence: ${VOX_SILENCE_DURATION}ms`);
+      console.log(`[config] server_vad enabled`);
     }
 
     const sessionConfig = {
+      model: REALTIME_MODEL,
       modalities: ['text', 'audio'],
-      instructions: SYSTEM_PROMPT,
       voice: VOX_VOICE,
+      instructions: SYSTEM_PROMPT,
       temperature: VOX_TEMPERATURE,
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'whisper-1' },
-      turn_detection,
       tools: toolDefinitions,
-      tool_choice: 'auto',
+      turn_detection: turn_detection,
     };
 
     console.log(`[config] tools: ${toolDefinitions.map(t => t.name).join(', ')}`);
-
     console.log(`[config] voice: ${VOX_VOICE}, temp: ${VOX_TEMPERATURE}`);
+    console.log(`[config] Sending session.update:`, JSON.stringify(sessionConfig, null, 2));
+
+    // x.ai uses session.update for configuration
     this.ws.send(JSON.stringify({ type: 'session.update', session: sessionConfig }));
   }
 
@@ -245,9 +304,21 @@ class RealtimeBridge {
 
   sendAudio(base64Pcm16) {
     if (!this.connected) return;
+    // Only log occasionally to avoid spam
+    if (Math.random() < 0.01) {
+      console.log(`[realtime] Sending audio chunk (${base64Pcm16.length} chars)`);
+    }
     this.ws.send(JSON.stringify({
       type: 'input_audio_buffer.append',
       audio: base64Pcm16,
+    }));
+  }
+
+  commitAudio() {
+    if (!this.connected) return;
+    console.log('[realtime] Committing audio buffer for processing');
+    this.ws.send(JSON.stringify({
+      type: 'input_audio_buffer.commit',
     }));
   }
 
@@ -310,6 +381,8 @@ async function main() {
       guildId: GUILD_ID,
       adapterCreator: client.guilds.cache.get(GUILD_ID).voiceAdapterCreator,
       selfDeaf: false,
+      selfMute: false,
+      encryptionMode: 'xsalsa20_poly1305',
     });
 
     try {
@@ -348,11 +421,15 @@ async function main() {
         end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 },
       });
 
-      const decoder = new OpusEncoder(48000, 2);
+      // Increase max listeners to prevent memory leak warnings
+      opusStream.setMaxListeners(20);
 
-      opusStream.on('data', (packet) => {
+      const decoder = new opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
+
+      opusStream.pipe(decoder);
+
+      decoder.on('data', (pcm48kStereo) => {
         try {
-          const pcm48kStereo = decoder.decode(packet);
           const pcm24kMono = downsampleStereoToMono24k(pcm48kStereo);
           const base64 = pcm24kMono.toString('base64');
           bridge.sendAudio(base64);
@@ -363,6 +440,8 @@ async function main() {
 
       opusStream.on('end', () => {
         console.log(`[receive] User ${userId} stopped speaking`);
+        // Commit the audio buffer for processing
+        bridge.commitAudio();
       });
     });
 
