@@ -219,7 +219,7 @@ sudo journalctl -u vox-discord.service --since today
 To update the bot:
 
 ```bash
-cd /home/bill/vox-discord
+cd vox-discord
 git pull
 npm install
 sudo systemctl restart vox-discord.service

@@ -4,7 +4,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const OPENCLAW_ROOT = path.join(process.env.HOME || '/home/bill', '.openclaw', 'workspace');
+const OPENCLAW_ROOT = path.join(process.env.HOME || process.cwd(), '.openclaw', 'workspace');
 const AGENT_DIR = path.join(OPENCLAW_ROOT, 'agents', 'vox-discord');
 const MEMORY_DIR = path.join(AGENT_DIR, 'memory');
 

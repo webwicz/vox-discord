@@ -136,7 +136,7 @@ if (!filePath.startsWith('/')) {
   filePath = path.join(WORKSPACE, filePath);
 }
 // Check: only allow workspace or specific paths
-if (!filePath.startsWith(WORKSPACE) && !filePath.startsWith('/Users/dv00003-00/dev/')) {
+if (!filePath.startsWith(WORKSPACE) && !filePath.startsWith('/home/user/dev/')) {
   return 'Access denied — can only read workspace or project files.';
 }
 ```
@@ -144,9 +144,9 @@ if (!filePath.startsWith(WORKSPACE) && !filePath.startsWith('/Users/dv00003-00/d
 **Bypass Examples:**
 ```
 "../../../etc/passwd"        # Relative path traversal
-"/Users/dv00003-00/dev/../../../../etc/passwd"  # Long path traversal
-"/Users/dv00003-00/dev/../../.env"  # Read bot credentials
-"/Users/dv00003-00/dev/../../.aws/credentials"  # AWS keys
+"/home/user/dev/../../../../etc/passwd"  # Long path traversal
+"/home/user/dev/../../.env"  # Read bot credentials
+"/home/user/dev/../../.aws/credentials"  # AWS keys
 ```
 
 **Why String Prefix is Unsafe:**
@@ -173,7 +173,7 @@ const fs = require('fs');
 
 const ALLOWED_DIRS = [
   path.resolve(WORKSPACE),
-  path.resolve('/Users/dv00003-00/dev/'),
+  path.resolve('/home/user/dev/'),
 ];
 
 function isPathAllowed(filePath) {
@@ -236,7 +236,7 @@ The workspace path is hardcoded to a macOS-specific path that doesn't exist on L
 
 ```javascript
 // CURRENT
-const WORKSPACE = '/Users/dv00003-00/.openclaw/workspace';
+const WORKSPACE = '/home/user/.openclaw/workspace';
 ```
 
 **Why It's a Problem:**
@@ -264,7 +264,7 @@ if (!fs.existsSync(WORKSPACE)) {
 **Timeline:** Implemented 2026-05-05
 
 **Changes made:**
-- Changed from hardcoded `/Users/dv00003-00/...` to `process.env.VOX_WORKSPACE || process.cwd()`
+- Changed from hardcoded `/home/user/...` to `process.env.VOX_WORKSPACE || process.cwd()`
 - Works on Linux, macOS, Windows
 - Falls back to current working directory if env var not set
 - Must set `VOX_WORKSPACE` env var in production `.env` file
@@ -844,7 +844,7 @@ const tests = [
   '../../../etc/passwd',
   '/etc/passwd',
   '../../.env',
-  '/Users/dv00003-00/dev/../../../../etc/shadow',
+  '/home/user/dev/../../../../etc/shadow',
 ];
 tests.forEach(async t => {
   const result = await tools.executeTool('read_file', {path: t});
