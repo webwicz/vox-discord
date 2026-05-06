@@ -32,16 +32,18 @@ Built by [Digital Forge Studios](https://dforge.ca). Free and open source.
 | 🧠 **Semantic VAD** | AI-powered turn detection — knows when you're done talking vs. just pausing |
 | 🗣️ **Barge-In** | Interrupt the bot mid-sentence. It stops and listens. |
 | 🔒 **DAVE E2EE** | Discord's mandatory end-to-end voice encryption, handled transparently |
-| 🛠️ **Agentic Tools** | Web search, weather, file reading, shell commands, Discord messaging |
+| 🛠️ **Agentic Tools** | Web search, weather, file reading, shell commands, Discord messaging, Google services |
 | ⚙️ **Fully Configurable** | Voice, personality, VAD mode, eagerness, temperature — all via env vars |
 | 👥 **Per-User Audio** | Discord sends separate streams per speaker — no diarization needed |
 | 🐳 **Docker Ready** | Dockerfile included for containerized deployment |
+| 🧠 **OpenClaw Integration** | Persistent memory and context across conversations |
+| 🔍 **xAI Tools** | Built-in web search, X/Twitter search, code execution, and MCP integrations |
 
 ## 🏗️ Architecture
 
 ```
 You speak → Discord Opus → decode → downsample 48kHz stereo → 24kHz mono
-  → base64 PCM16 → OpenAI Realtime API (WebSocket)
+  → base64 PCM16 → xAI Realtime API (WebSocket)
 
 AI responds → base64 PCM16 24kHz mono → upsample → 48kHz stereo
   → PlaybackStream → AudioPlayer → Discord voice channel
@@ -49,12 +51,13 @@ AI responds → base64 PCM16 24kHz mono → upsample → 48kHz stereo
 
 ### How It Works
 
-1. **Discord connection** — `discord.js` + `@discordjs/voice` handles gateway, voice connection, and DAVE E2EE (via `@snazzah/davey` + `sodium-native`)
+1. **Discord connection** — `discord.js` + `@discordjs/voice` handles gateway, voice connection, and DAVE E2EE
 2. **Audio receive** — subscribes to each user's Opus stream individually (Discord sends per-user streams, not a mix)
-3. **Downsampling** — Discord sends 48kHz stereo Opus → decode to PCM → downsample to 24kHz mono (what OpenAI expects)
-4. **OpenAI Realtime API** — persistent WebSocket connection, streams audio bidirectionally, handles VAD/turn detection server-side
-5. **Upsampling** — OpenAI sends 24kHz mono PCM16 → upsample to 48kHz stereo → push to Readable stream → Discord plays it
+3. **Downsampling** — Discord sends 48kHz stereo Opus → decode to PCM → downsample to 24kHz mono (what xAI expects)
+4. **xAI Realtime API** — persistent WebSocket connection, streams audio bidirectionally, handles VAD/turn detection server-side
+5. **Upsampling** — xAI sends 24kHz mono PCM16 → upsample to 48kHz stereo → push to Readable stream → Discord plays it
 6. **Tool calling** — model invokes functions mid-conversation, we execute and feed results back, model speaks the answer
+7. **OpenClaw integration** — persistent memory and context management across conversations
 
 ## 🚀 Quick Start
 
@@ -62,7 +65,7 @@ AI responds → base64 PCM16 24kHz mono → upsample → 48kHz stereo
 
 - **Node.js** >= 18
 - A **Discord bot** with voice permissions
-- **OpenAI Realtime API** access (via Azure AI Foundry or OpenAI directly)
+- **xAI Realtime API** access
 
 ### 1. Create a Discord Bot
 
@@ -75,12 +78,11 @@ AI responds → base64 PCM16 24kHz mono → upsample → 48kHz stereo
 https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot&permissions=36700160
 ```
 
-### 2. Get OpenAI Realtime API Access
+### 2. Get xAI Realtime API Access
 
 | Provider | Model | Notes |
 |----------|-------|-------|
-| **Azure AI Foundry** (recommended) | `gpt-realtime-mini` / `gpt-realtime-1.5` | Deploy in Azure AI Studio |
-| **OpenAI** | `gpt-realtime` | Direct Realtime API endpoint |
+| **xAI** | `grok-voice-think-fast-1.0` | xAI Realtime API endpoint |
 
 ### 3. Install & Run
 
@@ -112,17 +114,17 @@ All configuration via environment variables (`.env` file):
 | `DISCORD_TOKEN` | Discord bot token |
 | `DISCORD_GUILD_ID` | Server ID |
 | `DISCORD_CHANNEL_ID` | Voice channel ID |
-| `OPENAI_REALTIME_ENDPOINT` | WebSocket endpoint URL |
-| `OPENAI_REALTIME_API_KEY` | API key |
+| `OPENAI_REALTIME_ENDPOINT` | xAI WebSocket endpoint (wss://api.x.ai/v1/realtime) |
+| `OPENAI_REALTIME_API_KEY` | xAI API key |
 
 ### Optional
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `OPENAI_REALTIME_MODEL` | `gpt-realtime-mini` | Model deployment name |
-| `VOICE_SYSTEM_PROMPT` | Generic assistant | Personality / character instructions |
+| `OPENAI_REALTIME_MODEL` | `grok-voice-think-fast-1.0` | xAI model name |
+| `VOICE_SYSTEM_PROMPT` | VoxIcarus assistant prompt | Personality / character instructions |
 | `VOX_WORKSPACE` | Current directory | Directory for file access (tools can only read files here) |
-| `VOX_VOICE` | `alloy` | Voice: `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`, `verse`, `marin`, `cedar` |
+| `VOX_VOICE` | `hgfsvsyemqxq` | xAI voice ID |
 | `VOX_TEMPERATURE` | `0.8` | Response creativity (0.0–1.2) |
 
 ### Turn Detection
@@ -136,7 +138,45 @@ All configuration via environment variables (`.env` file):
 
 > **Tip:** Use `semantic_vad` — it uses the model itself to understand when you're done speaking, not just silence detection. It's the difference between a bot that interrupts your pauses and one that actually listens.
 
-## 🔒 Security & Sandbox
+## 🧠 OpenClaw Integration
+
+Vox Discord integrates with **OpenClaw** for persistent memory and context management:
+
+- **Startup Context**: Loads user preferences and available tools on boot
+- **Conversation Memory**: Saves all conversations to daily transcript files
+- **Agent Identity**: Maintains consistent personality across sessions
+- **Tool Integration**: Access to Home Assistant, Google services, GitHub, and more
+
+### Memory Structure
+```
+~/.openclaw/workspace/
+├── USER.md                    # User profile & preferences
+├── TOOLS.md                   # Available tools reference
+└── agents/vox-discord/
+    ├── AGENT.md              # Voice bot persona & config
+    └── memory/
+        ├── 2026-05-06.md     # Today's conversations
+        └── 2026-05-05.md     # Previous sessions
+```
+
+## 🛠️ Available Tools
+
+### xAI Built-in Tools
+- **Web Search**: Access current information from the internet
+- **X Search**: Search X (Twitter) for posts from authorized accounts
+- **Code Execution**: Run Python code for calculations and data processing
+
+### MCP Server Tools
+- **Home Assistant**: Control smart home devices and automations
+- **Google Services**: Access Gmail, Calendar, Drive through OAuth
+- **xAI Documentation**: Search xAI API documentation
+- **GitHub**: Manage repositories, issues, and pull requests
+
+### Local Tools
+- **File Reading**: Read project files and documentation
+- **Command Execution**: Run safe shell commands
+- **Weather**: Get current weather conditions
+- **Discord Messaging**: Send messages to Discord channels
 
 The bot runs agentic tools that execute shell commands and read files. Security is implemented via:
 
