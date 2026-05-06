@@ -123,6 +123,33 @@ The bot integrates with external MCP servers for specialized functionality:
 
 See `AUDIT_FINDINGS.md` for full security audit details.
 
+## OpenClaw Integration
+
+The bot integrates with the **OpenClaw** persistent agent infrastructure for memory and context management:
+
+### Memory & Context
+- **Startup Context**: Reads `~/.openclaw/workspace/USER.md` and `~/.openclaw/workspace/TOOLS.md` on boot
+- **Transcript Logging**: Writes conversation transcripts to `~/.openclaw/workspace/agents/vox-discord/memory/YYYY-MM-DD.md`
+- **Agent Identity**: Stores voice bot configuration in `~/.openclaw/workspace/agents/vox-discord/AGENT.md`
+- **Session Tracking**: Daily memory files track all conversations
+
+### Directory Structure
+```
+~/.openclaw/workspace/
+├── USER.md                    # User profile & preferences
+├── TOOLS.md                   # Available tools reference
+└── agents/vox-discord/
+    ├── AGENT.md              # Voice bot persona & config
+    └── memory/
+        ├── 2026-05-06.md     # Today's conversations
+        └── 2026-05-05.md     # Previous sessions
+```
+
+### Implementation
+- Module: `openclaw-memory.js` provides `loadStartupContext()`, `appendTranscript()`, and memory utilities
+- Transcripts are batched and written to disk on response completion (`response.done` events)
+- Daily files are created automatically with ISO timestamps
+
 ## Configuration
 
 ### Environment Variables

@@ -19,6 +19,7 @@ const { opus } = require('prism-media');
 const WebSocket = require('ws');
 const { Transform, PassThrough, Readable } = require('stream');
 const { toolDefinitions, executeTool, setDiscordClient } = require('./tools');
+const { loadStartupContext, appendTranscript, getMemoryStats } = require('./openclaw-memory');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -26,7 +27,40 @@ const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const REALTIME_ENDPOINT = process.env.OPENAI_REALTIME_ENDPOINT;
 const REALTIME_API_KEY = process.env.OPENAI_REALTIME_API_KEY;
 const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime-1.5';
-const SYSTEM_PROMPT = process.env.VOICE_SYSTEM_PROMPT || 'You are a helpful voice assistant.';
+const SYSTEM_PROMPT = process.env.VOICE_SYSTEM_PROMPT || `You are Roland, a helpful voice assistant with access to various tools and services.
+
+## Your Capabilities
+
+### Web & Information Tools
+- **Web Search**: Search the internet for current information, news, facts, and prices
+- **X Search**: Advanced search capabilities through xAI
+- **Code Execution**: Run code snippets and get results
+- **Documentation**: Access xAI documentation and help
+
+### Google Account Access (gog)
+You have access to Google services through OAuth. You can:
+- Read Gmail emails and manage inbox
+- Access Google Calendar for scheduling and events
+- Manage Google Drive files and documents
+- Use Google Sheets, Docs, and other Google Workspace tools
+- Access Google Photos and other Google services
+
+### Home Assistant Integration
+You can control smart home devices, check sensors, and manage home automation through the home-assistant MCP server.
+
+### Local Tools
+- **File Reading**: Read project files and documentation from the workspace
+- **Command Execution**: Run safe shell commands for system information
+- **Weather**: Get current weather conditions for any location
+- **Time**: Get current date and time
+- **Discord Messaging**: Send messages to various Discord channels
+
+### Voice Features
+- Real-time voice conversation with natural speech
+- Voice activity detection for seamless interaction
+- Audio processing and response generation
+
+When users ask about Google accounts, Gmail, Calendar, Drive, or other Google services, let them know you can access these through your Google integration and offer to help with specific tasks like checking emails, creating calendar events, or managing files.`;
 
 // Tuning knobs — all configurable via env vars
 const VOX_VAD_TYPE = process.env.VOX_VAD_TYPE || 'semantic_vad'; // server_vad | semantic_vad | off
@@ -80,6 +114,7 @@ class RealtimeBridge {
     this.onAudioDelta = null; // callback(base64Audio)
     this.onTranscript = null; // callback(text)
     this.connected = false;
+    this._transcriptBuffer = ''; // Buffer for AI transcripts
   }
 
   async connect() {
@@ -146,6 +181,9 @@ class RealtimeBridge {
       case 'response.output_text.delta':
         if (event.delta) {
           process.stdout.write(`[AI] ${event.delta}`);
+          // Append to .openclaw memory (will be batched by appendTranscript)
+          if (!this._transcriptBuffer) this._transcriptBuffer = '';
+          this._transcriptBuffer += event.delta;
         }
         break;
       case 'response.audio_transcript.done':
@@ -153,6 +191,11 @@ class RealtimeBridge {
         break;
       case 'response.done':
         console.log('[realtime] Response complete');
+        // Flush transcript buffer to memory
+        if (this._transcriptBuffer) {
+          appendTranscript('AI', this._transcriptBuffer);
+          this._transcriptBuffer = '';
+        }
         // Check for function calls in the response
         if (event.response?.output) {
           for (const item of event.response.output) {
@@ -422,6 +465,15 @@ process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 // --- Main ---
 
 async function main() {
+  // Load .openclaw context
+  console.log('[startup] Loading .openclaw context...');
+  const context = loadStartupContext();
+  if (context.agent) console.log('[startup] ✓ Agent config loaded');
+  if (context.user) console.log('[startup] ✓ User context available');
+  if (context.tools) console.log('[startup] ✓ Tools reference available');
+  const memStats = getMemoryStats();
+  console.log(`[startup] Memory: ${memStats.totalSessions} session(s), today: ${Math.round(memStats.todaySize / 1024)}KB`);
+
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -440,7 +492,6 @@ async function main() {
       adapterCreator: client.guilds.cache.get(GUILD_ID).voiceAdapterCreator,
       selfDeaf: false,
       selfMute: false,
-      encryptionMode: 'xsalsa20_poly1305',
     });
 
     try {
@@ -475,12 +526,18 @@ async function main() {
     voiceConnection.receiver.speaking.on('start', (userId) => {
       console.log(`[receive] User ${userId} started speaking`);
 
-      const opusStream = connection.receiver.subscribe(userId, {
+      const opusStream = voiceConnection.receiver.subscribe(userId, {
         end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 },
       });
 
       // Increase max listeners to prevent memory leak warnings
       opusStream.setMaxListeners(20);
+
+      // Handle decryption errors gracefully
+      opusStream.on('error', (error) => {
+        console.warn(`[receive] Opus stream error for user ${userId}: ${error.message}`);
+        // Don't crash on decryption errors, just log and continue
+      });
 
       const decoder = new opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
 
