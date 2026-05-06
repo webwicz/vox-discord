@@ -10,6 +10,7 @@ This file contains essential information for Claude to work effectively with the
 - Real-time voice conversations with xAI's Grok model
 - Discord voice channel integration with DAVE E2EE encryption
 - Automatic speech detection and turn-taking
+- **Barge-in support**: Interrupt bot mid-sentence by speaking with noise filtering to avoid false positives
 - **xAI built-in tools**: web_search and x_search (X/Twitter) for current information access
 - Automatic reconnection on connection failures
 - Configurable voice settings and personality
@@ -41,11 +42,6 @@ The voice bot now uses xAI's built-in tools for enhanced functionality:
 - **Allowed Handles**: `elonmusk`, `xai`
 - **Purpose**: Search X (Twitter) for posts from specific accounts
 - **Usage**: Provides access to real-time social media information from authorized accounts
-
-### Code Execution Tool
-- **Type**: `code_execution`
-- **Purpose**: Execute Python code for calculations, data processing, and API calls
-- **Usage**: Can be used for weather queries, mathematical computations, and other programmatic tasks
 
 ### Code Execution Tool
 - **Type**: `code_execution`
@@ -112,6 +108,17 @@ The bot integrates with external MCP servers for specialized functionality:
 - Log connection events and errors appropriately
 - Handle malformed audio data gracefully
 - Provide fallback behavior for API failures
+
+### Barge-In (Interrupt) Feature
+- **Playback Tracking**: `bridge.isPlaying` flag set to `true` when audio.delta events arrive, `false` on response.done
+- **Interrupt Detection**: User speech detected while bot is playing triggers immediate response cancellation via `response.cancel` to xAI
+- **Noise Filtering**: 
+  - Audio energy calculation (RMS normalized 0-1) with threshold of 0.02 to distinguish speech from background noise
+  - Minimum 200ms speech duration required to avoid triggering on short noise bursts
+  - Per-sample filtering: only audio chunks with energy > 0.02 sent to xAI
+- **Buffer Management**: `playback.clearBuffer()` flushes queued audio on interrupt to prevent delayed playback
+- **Diagnostics**: Detailed logging of speech duration, average energy, and barge-in events for tuning and debugging
+- **Implementation**: See lines 388-399 (interruptResponse), 425-429 (clearBuffer), 553-562 (calculateAudioEnergy), 569-591 (barge-in detection)
 
 ### Security Best Practices
 - **Command Execution**: Enhanced blocklist prevents command injection via `$(`, backticks, `eval`, `exec`
@@ -273,6 +280,12 @@ See [`SUBAGENTS.md`](./SUBAGENTS.md) for complete implementation details.
 - Monitor logs for connection events and audio processing
 - Verify tool execution works correctly
 - Test automatic reconnection after network issues
+- **Barge-in Testing**: 
+  - Verify bot stops mid-sentence when user interrupts
+  - Test with background noise to ensure false positive filtering works (only interrupts on actual speech, not ambient sound)
+  - Monitor logs for speech duration, average energy, and barge-in event messages
+  - Expected log format: `[barge-in] User <id> interrupted bot (was speaking)`
+  - Energy threshold: 0.02 (normalized 0-1); duration threshold: 200ms
 
 ## Subagents (Complex Task Handling)
 
