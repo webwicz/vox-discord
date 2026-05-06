@@ -874,5 +874,143 @@ With these fixes applied, the bot will be suitable for production deployment in 
 
 ---
 
+## Deferred Items & Future Work
+
+The following issues were identified but deferred for future review. They are documented here for reference.
+
+### #6: Rate Limiting on External APIs
+
+**Severity:** MEDIUM  
+**Status:** ⏭️ DEFERRED - Low priority for single-user bot  
+**Reason:** Bot runs in controlled environment (single Discord voice channel). External APIs (DuckDuckGo, wttr.in) have their own rate limits and are not the primary bottleneck.
+
+**When to implement:**
+- If deploying as multi-user public service
+- If experiencing rate limit blocks from external APIs
+- If xAI model calls tools excessively
+
+**Effort:** 20-30 minutes  
+**Implementation:** Simple time-window rate limiting per tool (see AUDIT section for details)
+
+---
+
+### #8: WebSocket Auto-Reconnect Without Backoff
+
+**Severity:** MEDIUM  
+**Status:** ⏭️ DEFERRED - Current implementation acceptable for development  
+**Reason:** Graceful shutdown was implemented (SIGTERM/SIGINT). Exponential backoff would improve operational resilience but isn't critical for single-user voice bot.
+
+**Current behavior:**
+- Reconnects every 5 seconds if connection fails
+- No maximum retry limit
+- Works fine for temporary network blips
+- Could spam logs on permanent failures
+
+**When to implement:**
+- When deploying to production with monitoring/alerting
+- If experiencing issues with xAI API downtime
+- For Kubernetes/orchestrator deployments
+
+**Effort:** 25-35 minutes  
+**Implementation:** Add exponential backoff (1s → 2s → 4s → 8s) with max 10 retries, reset counter on success
+
+---
+
+### #9: Docker Security Hardening
+
+**Severity:** MEDIUM  
+**Status:** ❌ DELIBERATELY SKIPPED  
+**Reason:** User opted to skip Docker security improvements (container runs as root, no non-root user, dummy health check).
+
+**What would be improved:**
+- Run container as non-root user (least privilege)
+- Implement proper health check (verify WebSocket connectivity)
+- Multi-stage Dockerfile (reduces image size)
+- Use specific base image tag (not `node:22-slim` only)
+
+**If you want to implement later:**
+- Create non-root user in Dockerfile
+- Add /health endpoint or WebSocket ping check
+- Test with: `docker run --user 1000:1000 ...`
+
+**Effort:** 20-30 minutes
+
+---
+
+### #10: MaxListeners Configurable
+
+**Severity:** LOW  
+**Status:** ⏭️ DEFERRED - Acceptable default for current use case  
+**Reason:** Hard-coded value of 20 is sufficient for single-user bot. Would be needed for 20+ concurrent speakers.
+
+**Current:**
+```javascript
+opusStream.setMaxListeners(20);  // Hard-coded
+```
+
+**What would be improved:**
+```javascript
+const maxListeners = parseInt(process.env.VOX_MAX_LISTENERS || '50');
+opusStream.setMaxListeners(maxListeners);
+```
+
+**When needed:**
+- Deploying to high-concurrency environment
+- 20+ concurrent users in same voice channel
+- Monitoring shows "MaxListenersExceededWarning" errors
+
+**Effort:** 5 minutes (trivial change)
+
+---
+
+## Final Audit Summary
+
+### Security Posture
+
+**Before Audit:**
+- 2 CRITICAL vulnerabilities (command injection, path traversal)
+- 5 MEDIUM issues (logging, error handling, shutdown, etc.)
+- 1 LOW issue (scalability)
+
+**After Audit & Fixes:**
+- ✅ 0 CRITICAL vulnerabilities
+- ✅ 2 MEDIUM issues fixed (logs, error handling, shutdown)
+- ✅ 3 MEDIUM issues fixed (command injection, path traversal, hardcoded path)
+- ⏭️ 3 MEDIUM issues deferred (#6, #8, #9 skipped)
+- ⏭️ 1 LOW issue deferred (#10 skipped)
+
+**Overall:** Production-ready for your use case (single-user voice bot in controlled environment)
+
+### Files Modified
+
+- `index.js` - Graceful shutdown (35 lines)
+- `tools.js` - Security fixes + logging improvements (60 lines)
+- `CLAUDE.md` - Security documentation added
+- `README.md` - Security & sandbox section added
+- `.env.example` - VOX_WORKSPACE variable documented
+- `AUDIT_FINDINGS.md` - Comprehensive audit report (600+ lines)
+
+### Testing Recommendations
+
+Before deploying, verify:
+1. ✓ Bot starts without errors: `npm start`
+2. ✓ Graceful shutdown works: `Ctrl+C` cleanly exits
+3. ✓ Path validation works: Try `read_file ../../../etc/passwd` (should fail)
+4. ✓ Command blocking works: Try `run_command "rm -rf /"` (should fail)
+5. ✓ Error messages are generic: Check logs don't leak file paths
+
+### Review Checklist for Future Maintainers
+
+When reviewing this codebase:
+- [ ] Understand why #6, #9, #10 were deferred (see above)
+- [ ] If deploying publicly, implement #6 (rate limiting) and #8 (backoff)
+- [ ] If deploying to Kubernetes, implement #9 (Docker hardening)
+- [ ] Monitor for "MaxListenersExceededWarning" — if seen, implement #10
+- [ ] Review `AUDIT_FINDINGS.md` for detailed security rationale
+
+---
+
 **Audit completed by:** Claude Code  
-**Date:** 2026-05-05
+**Date:** 2026-05-05  
+**Commit:** 2f53b81 - Security hardening: fix command injection, path traversal, add graceful shutdown  
+**Coverage:** 6 of 10 issues fixed (60%) | 3 deferred (30%) | 1 skipped (10%)
