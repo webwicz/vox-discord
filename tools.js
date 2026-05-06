@@ -435,6 +435,64 @@ async function callMcpTool(mcpUrl, toolName, toolArgs) {
   }
 }
 
+// Call Rezi cloud MCP API directly
+async function callReziApi(toolName, toolArgs) {
+  const apiToken = process.env.REZI_API_TOKEN;
+  if (!apiToken) {
+    throw new Error('REZI_API_TOKEN not set. Get it from https://app.rezi.ai → Settings → Integrations');
+  }
+
+  try {
+    const payload = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: toolName,
+        arguments: toolArgs,
+      },
+    });
+
+    return new Promise((resolve, reject) => {
+      const opts = {
+        hostname: 'api.rezi.ai',
+        path: '/mcp',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': payload.length,
+          'Authorization': `Bearer ${apiToken}`,
+        },
+      };
+
+      const req = https.request(opts, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            if (response.result) {
+              resolve(response.result.text || JSON.stringify(response.result));
+            } else if (response.error) {
+              reject(new Error(response.error.message));
+            } else {
+              resolve(JSON.stringify(response));
+            }
+          } catch (e) {
+            resolve(data);
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+  } catch (err) {
+    throw new Error(`Rezi API call failed: ${err.message}`);
+  }
+}
+
 // Channel name → ID map for Digital Forge server
 const CHANNEL_MAP = {
   'workshop': '1480309102952583363',
@@ -761,22 +819,22 @@ async function executeTool(name, args) {
         return `Task submitted: ${taskId}\nStatus: pending\nYou can check status by asking "check task status" or "what's the status of my task"`;
       }
 
-      // --- Rezi Resume Management ---
+      // --- Rezi Resume Management (Cloud API) ---
 
       case 'rezi_list_resumes': {
-        const result = await callMcpTool('http://localhost:3006', 'list_resumes', {});
+        const result = await callReziApi('list_resumes', {});
         return result;
       }
 
       case 'rezi_read_resume': {
-        const result = await callMcpTool('http://localhost:3006', 'read_resume', {
+        const result = await callReziApi('read_resume', {
           resume_id: args.resume_id,
         });
         return result;
       }
 
       case 'rezi_write_resume': {
-        const result = await callMcpTool('http://localhost:3006', 'write_resume', {
+        const result = await callReziApi('write_resume', {
           resume_id: args.resume_id || null,
           name: args.name,
           jobTitle: args.job_title,
