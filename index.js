@@ -116,6 +116,7 @@ class RealtimeBridge {
     this.onTranscript = null; // callback(text)
     this.connected = false;
     this._transcriptBuffer = ''; // Buffer for AI transcripts
+    this.isPlaying = false; // Track if bot is currently speaking
   }
 
   async connect() {
@@ -174,6 +175,7 @@ class RealtimeBridge {
         break;
       case 'response.audio.delta':
       case 'response.output_audio.delta':
+        this.isPlaying = true; // Bot is now playing audio
         if (this.onAudioDelta) {
           this.onAudioDelta(event.delta);
         }
@@ -192,6 +194,7 @@ class RealtimeBridge {
         break;
       case 'response.done':
         console.log('[realtime] Response complete');
+        this.isPlaying = false; // Bot finished playing audio
         // Flush transcript buffer to memory
         if (this._transcriptBuffer) {
           appendTranscript('AI', this._transcriptBuffer);
@@ -382,6 +385,19 @@ class RealtimeBridge {
     }));
   }
 
+  interruptResponse() {
+    // Cancel any in-flight response
+    if (!this.connected) return;
+    console.log('[realtime] Cancelling response due to barge-in');
+    this.isPlaying = false;
+    this._transcriptBuffer = ''; // Clear transcript buffer
+
+    // Send response.cancel to stop xAI from generating more audio
+    this.ws.send(JSON.stringify({
+      type: 'response.cancel',
+    }));
+  }
+
   close() {
     if (this.ws) this.ws.close();
   }
@@ -404,6 +420,12 @@ class PlaybackStream extends Readable {
     } else {
       this.chunks.push(buf);
     }
+  }
+
+  clearBuffer() {
+    // Clear all queued audio chunks (for barge-in interruption)
+    console.log(`[playback] Clearing buffer (${this.chunks.length} chunks)`);
+    this.chunks = [];
   }
 
   _read(size) {
@@ -523,8 +545,36 @@ async function main() {
     };
 
     // Discord audio → OpenAI
+    let currentSpeakerId = null;
+    let speechStartTime = null;
+    const SPEECH_MIN_DURATION = 200; // ms - minimum speech duration to avoid noise false positives
+    const SPEECH_MIN_ENERGY = 0.02; // Minimum energy threshold to detect actual speech vs noise
+
+    function calculateAudioEnergy(pcm16Buffer) {
+      // Calculate RMS energy to detect speech vs noise
+      let sum = 0;
+      for (let i = 0; i < pcm16Buffer.length; i += 2) {
+        const sample = pcm16Buffer.readInt16LE(i);
+        sum += sample * sample;
+      }
+      const rms = Math.sqrt(sum / (pcm16Buffer.length / 2));
+      return rms / 32768; // Normalize to 0-1
+    }
+
     voiceConnection.receiver.speaking.on('start', (userId) => {
-      console.log(`[receive] User ${userId} started speaking`);
+      const receiveStartTime = Date.now();
+      console.log(`[receive] User ${userId} started speaking at ${receiveStartTime}`);
+      speechStartTime = receiveStartTime;
+
+      // Barge-in: If bot is currently playing audio, interrupt it
+      if (bridge.isPlaying && currentSpeakerId !== userId) {
+        console.log(`[barge-in] User ${userId} interrupted bot (was speaking)`);
+        bridge.interruptResponse();
+        player.stop();
+        playback.clearBuffer();
+      }
+
+      currentSpeakerId = userId;
 
       const opusStream = voiceConnection.receiver.subscribe(userId, {
         end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 },
@@ -536,27 +586,48 @@ async function main() {
       // Handle decryption errors gracefully
       opusStream.on('error', (error) => {
         console.warn(`[receive] Opus stream error for user ${userId}: ${error.message}`);
-        // Don't crash on decryption errors, just log and continue
       });
 
       const decoder = new opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
-
       opusStream.pipe(decoder);
+
+      let speechEnergy = 0;
+      let sampleCount = 0;
 
       decoder.on('data', (pcm48kStereo) => {
         try {
           const pcm24kMono = downsampleStereoToMono24k(pcm48kStereo);
-          const base64 = pcm24kMono.toString('base64');
-          bridge.sendAudio(base64);
+          const energy = calculateAudioEnergy(pcm24kMono);
+          speechEnergy += energy;
+          sampleCount++;
+
+          // Only send audio if it has sufficient energy (actual speech, not noise)
+          if (energy > SPEECH_MIN_ENERGY) {
+            const base64 = pcm24kMono.toString('base64');
+            bridge.sendAudio(base64);
+          }
         } catch (e) {
           // Opus decode errors are normal for first few packets
         }
       });
 
       opusStream.on('end', () => {
-        console.log(`[receive] User ${userId} stopped speaking`);
-        // Commit the audio buffer for processing
-        bridge.commitAudio();
+        const speechEndTime = Date.now();
+        const speechDuration = speechEndTime - speechStartTime;
+        const avgEnergy = sampleCount > 0 ? speechEnergy / sampleCount : 0;
+
+        console.log(`[receive] User ${userId} stopped speaking at ${speechEndTime} (duration: ${speechDuration}ms, energy: ${avgEnergy.toFixed(3)})`);
+
+        // Only commit if speech was long enough (filter out noise bursts)
+        if (speechDuration >= SPEECH_MIN_DURATION && avgEnergy > SPEECH_MIN_ENERGY) {
+          console.log(`[vad] Committing audio (${speechDuration}ms @ ${avgEnergy.toFixed(3)} energy)`);
+          bridge.commitAudio();
+        } else {
+          console.log(`[vad] Discarding short noise burst (${speechDuration}ms @ ${avgEnergy.toFixed(3)} energy)`);
+        }
+
+        currentSpeakerId = null;
+        speechStartTime = null;
       });
     });
 
