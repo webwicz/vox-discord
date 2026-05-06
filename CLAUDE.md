@@ -70,6 +70,13 @@ The bot integrates with external MCP servers for specialized functionality:
 - **Purpose**: Search and retrieve xAI documentation
 - **Usage**: Access to xAI API documentation, developer resources, and technical information
 
+#### Weather MCP Server
+- **Server URL**: `http://localhost:3005`
+- **Label**: `weather`
+- **Purpose**: Get current weather conditions and forecasts using Open-Meteo API
+- **Capabilities**: Current weather, hourly forecasts, daily forecasts, city search by name or coordinates
+- **Usage**: Weather queries, forecasts, and location-based weather information
+
 ### Key Classes
 - **RealtimeBridge** - Manages WebSocket connection to xAI, handles events, sends/receives audio
 - **PlaybackStream** - Custom Transform stream for audio playback to Discord
