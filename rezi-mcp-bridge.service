@@ -1,0 +1,16 @@
+[Unit]
+Description=Rezi MCP Bridge - Resume API Proxy
+After=network.target
+
+[Service]
+Type=simple
+User=bill
+WorkingDirectory=/home/bill/vox-discord
+ExecStart=/usr/bin/node /home/bill/vox-discord/rezi-mcp-bridge.js
+Restart=always
+RestartSec=10
+Environment="NODE_ENV=production"
+EnvironmentFile=/home/bill/vox-discord/.env
+
+[Install]
+WantedBy=multi-user.target
