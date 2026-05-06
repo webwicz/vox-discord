@@ -101,17 +101,32 @@ The bot integrates with external MCP servers for specialized functionality:
 - Handle malformed audio data gracefully
 - Provide fallback behavior for API failures
 
+### Security Best Practices
+- **Command Execution**: Enhanced blocklist prevents command injection via `$(`, backticks, `eval`, `exec`
+- **File Access**: Path traversal prevented using `path.resolve()` + normalized allowlist validation
+- **Log Masking**: Session config and tool arguments not logged to prevent credential exposure
+- **Error Messages**: Generic error responses prevent information leakage; full errors logged internally only
+- **Graceful Shutdown**: Signal handlers (SIGTERM/SIGINT) cleanly close WebSocket and voice connections
+- **Workspace Configuration**: `VOX_WORKSPACE` env var allows cross-platform deployment (was hardcoded to macOS path)
+
+See `AUDIT_FINDINGS.md` for full security audit details.
+
 ## Configuration
 
 ### Environment Variables
+
+**Required:**
 - `DISCORD_TOKEN` - Discord bot token
 - `DISCORD_GUILD_ID` - Target Discord server ID
 - `DISCORD_CHANNEL_ID` - Voice channel ID to join
 - `OPENAI_REALTIME_ENDPOINT` - xAI WebSocket endpoint
 - `OPENAI_REALTIME_API_KEY` - xAI API key
 - `OPENAI_REALTIME_MODEL` - Model name (grok-voice-think-fast-1.0)
-- `VOICE_SYSTEM_PROMPT` - AI personality prompt
-- Voice settings: `VOX_VOICE`, `VOX_TEMPERATURE`, etc.
+
+**Optional:**
+- `VOICE_SYSTEM_PROMPT` - AI personality prompt (default: "You are a helpful voice assistant.")
+- `VOX_WORKSPACE` - Workspace directory for file access (default: current working directory)
+- Voice settings: `VOX_VOICE`, `VOX_TEMPERATURE`, `VOX_VAD_TYPE`, `VOX_EAGERNESS`, etc.
 
 ## Common Issues & Solutions
 

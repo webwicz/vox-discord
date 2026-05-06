@@ -115,12 +115,13 @@ All configuration via environment variables (`.env` file):
 | `OPENAI_REALTIME_ENDPOINT` | WebSocket endpoint URL |
 | `OPENAI_REALTIME_API_KEY` | API key |
 
-### Voice & AI
+### Optional
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OPENAI_REALTIME_MODEL` | `gpt-realtime-mini` | Model deployment name |
 | `VOICE_SYSTEM_PROMPT` | Generic assistant | Personality / character instructions |
+| `VOX_WORKSPACE` | Current directory | Directory for file access (tools can only read files here) |
 | `VOX_VOICE` | `alloy` | Voice: `alloy`, `ash`, `ballad`, `coral`, `echo`, `sage`, `shimmer`, `verse`, `marin`, `cedar` |
 | `VOX_TEMPERATURE` | `0.8` | Response creativity (0.0–1.2) |
 
@@ -134,6 +135,18 @@ All configuration via environment variables (`.env` file):
 | `VOX_SILENCE_DURATION` | `500` | Server VAD: silence ms before turn ends |
 
 > **Tip:** Use `semantic_vad` — it uses the model itself to understand when you're done speaking, not just silence detection. It's the difference between a bot that interrupts your pauses and one that actually listens.
+
+## 🔒 Security & Sandbox
+
+The bot runs agentic tools that execute shell commands and read files. Security is implemented via:
+
+- **Command Execution**: Blocklist prevents dangerous commands (`rm`, `mkfs`, `eval`, `$(`, backticks, etc.)
+- **File Access**: Path traversal protection — tools can only read files in `VOX_WORKSPACE` directory
+- **Log Masking**: No sensitive data (API keys, tool arguments) logged to stdout
+- **Error Handling**: Generic error messages to users; detailed errors logged internally only
+- **Graceful Shutdown**: Handles SIGTERM/SIGINT cleanly for Docker containers
+
+For full security audit details, see [`AUDIT_FINDINGS.md`](./AUDIT_FINDINGS.md).
 
 ## 🛠️ Agentic Tools
 

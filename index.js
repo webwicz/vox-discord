@@ -314,7 +314,8 @@ class RealtimeBridge {
 
     console.log(`[config] tools: web_search, x_search, code_execution, mcp:home-assistant, mcp:gog, mcp:xai-docs`);
     console.log(`[config] voice: ${VOX_VOICE}, temp: ${VOX_TEMPERATURE}`);
-    console.log(`[config] Sending session.update:`, JSON.stringify(sessionConfig, null, 2));
+    console.log(`[config] model: ${sessionConfig.model}, modalities: text, audio`);
+    console.log(`[config] session configured and sending to xAI`);
 
     // x.ai uses session.update for configuration
     this.ws.send(JSON.stringify({ type: 'session.update', session: sessionConfig }));
@@ -386,6 +387,38 @@ class PlaybackStream extends Readable {
   }
 }
 
+// --- Graceful Shutdown ---
+
+let bridge = null;
+let voiceConnection = null;
+
+async function gracefulShutdown(signal) {
+  console.log(`\n[shutdown] Received ${signal}, shutting down gracefully...`);
+
+  try {
+    // Close WebSocket connection to xAI
+    if (bridge?.connected && bridge.ws) {
+      bridge.ws.close(1000, 'Bot shutting down');
+      console.log('[shutdown] ✓ Closed xAI WebSocket');
+    }
+
+    // Disconnect from Discord voice
+    if (voiceConnection) {
+      voiceConnection.destroy();
+      console.log('[shutdown] ✓ Disconnected from Discord voice');
+    }
+  } catch (err) {
+    console.error('[shutdown] Error during shutdown:', err.message);
+  }
+
+  console.log('[shutdown] Goodbye!');
+  process.exit(0);
+}
+
+// Register signal handlers for graceful shutdown
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
 // --- Main ---
 
 async function main() {
@@ -400,8 +433,8 @@ async function main() {
     console.log(`[discord] ${client.user.tag} is ready`);
     setDiscordClient(client);
 
-    // Join voice channel
-    const connection = joinVoiceChannel({
+    // Join voice channel (assign to global for graceful shutdown)
+    voiceConnection = joinVoiceChannel({
       channelId: CHANNEL_ID,
       guildId: GUILD_ID,
       adapterCreator: client.guilds.cache.get(GUILD_ID).voiceAdapterCreator,
@@ -411,15 +444,15 @@ async function main() {
     });
 
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 15_000);
+      await entersState(voiceConnection, VoiceConnectionStatus.Ready, 15_000);
       console.log('[discord] Voice connection ready');
     } catch (err) {
       console.error('[discord] Failed to join voice:', err.message);
       process.exit(1);
     }
 
-    // Connect to OpenAI Realtime
-    const bridge = new RealtimeBridge();
+    // Connect to OpenAI Realtime (assign to global for graceful shutdown)
+    bridge = new RealtimeBridge();
     await bridge.connect();
 
     // Set up playback
@@ -429,7 +462,7 @@ async function main() {
       inputType: StreamType.Raw,
     });
     player.play(resource);
-    connection.subscribe(player);
+    voiceConnection.subscribe(player);
 
     // OpenAI audio → Discord playback
     bridge.onAudioDelta = (base64Audio) => {
@@ -439,7 +472,7 @@ async function main() {
     };
 
     // Discord audio → OpenAI
-    connection.receiver.speaking.on('start', (userId) => {
+    voiceConnection.receiver.speaking.on('start', (userId) => {
       console.log(`[receive] User ${userId} started speaking`);
 
       const opusStream = connection.receiver.subscribe(userId, {

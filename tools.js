@@ -137,7 +137,8 @@ const CHANNEL_MAP = {
   'dmge': '1481800531130449982',
 };
 
-const WORKSPACE = '/Users/dv00003-00/.openclaw/workspace';
+// Workspace path — configurable via env var, fallback to current directory
+const WORKSPACE = process.env.VOX_WORKSPACE || process.cwd();
 
 // Discord client reference — set by main
 let discordClient = null;
@@ -146,7 +147,8 @@ function setDiscordClient(client) {
 }
 
 async function executeTool(name, args) {
-  console.log(`[tool] Executing: ${name}(${JSON.stringify(args)})`);
+  // Log tool name only, not args (they could contain sensitive data)
+  console.log(`[tool] Executing: ${name}`);
 
   try {
     switch (name) {
@@ -188,19 +190,40 @@ async function executeTool(name, args) {
       case 'read_file': {
         const fs = require('fs');
         const path = require('path');
-        let filePath = args.path;
-        // Resolve relative to workspace
-        if (!filePath.startsWith('/')) {
-          filePath = path.join(WORKSPACE, filePath);
+
+        // Normalize requested path to absolute canonical form
+        let requestedPath = args.path;
+        if (!path.isAbsolute(requestedPath)) {
+          requestedPath = path.join(WORKSPACE, requestedPath);
         }
-        // Safety: only allow reading from workspace or dev dirs
-        if (!filePath.startsWith(WORKSPACE) && !filePath.startsWith('/Users/dv00003-00/dev/')) {
-          return 'Access denied — can only read workspace or project files.';
+        const resolvedPath = path.resolve(requestedPath);
+
+        // Allowlist of directories — use normalized absolute paths
+        const allowedDirs = [
+          path.resolve(WORKSPACE),
+        ];
+
+        // Security: verify resolved path is within an allowed directory
+        const isAllowed = allowedDirs.some(allowedDir => {
+          return resolvedPath === allowedDir ||
+                 resolvedPath.startsWith(allowedDir + path.sep);
+        });
+
+        if (!isAllowed) {
+          return 'Access denied — can only read workspace files.';
         }
-        if (!fs.existsSync(filePath)) {
-          return `File not found: ${args.path}`;
+
+        // Check file exists and is a regular file (not directory/symlink to elsewhere)
+        if (!fs.existsSync(resolvedPath)) {
+          return 'File not found.';
         }
-        const content = fs.readFileSync(filePath, 'utf-8');
+
+        const stats = fs.lstatSync(resolvedPath);
+        if (!stats.isFile()) {
+          return 'Cannot read: not a regular file.';
+        }
+
+        const content = fs.readFileSync(resolvedPath, 'utf-8');
         // Truncate for voice context
         if (content.length > 3000) {
           return content.substring(0, 3000) + '\n\n[... truncated for voice context]';
@@ -209,9 +232,13 @@ async function executeTool(name, args) {
       }
 
       case 'run_command': {
-        // Safety: block destructive commands
+        // Safety: block destructive commands and injection vectors
         const cmd = args.command;
-        const blocked = ['rm ', 'rm\t', 'rmdir', 'mkfs', 'dd ', 'kill ', '> /', 'sudo rm'];
+        const blocked = [
+          'rm ', 'rm\t', 'rmdir', 'mkfs', 'dd ', 'kill ', '> /', 'sudo rm',
+          '$(', '`',  // Command substitution (injection vectors)
+          'eval', 'exec ',  // Dangerous builtins
+        ];
         if (blocked.some(b => cmd.includes(b))) {
           return 'Blocked — destructive commands not allowed via voice.';
         }
@@ -248,8 +275,10 @@ async function executeTool(name, args) {
         return `Unknown tool: ${name}`;
     }
   } catch (err) {
-    console.error(`[tool] Error in ${name}:`, err.message);
-    return `Error: ${err.message}`;
+    // Log full error internally for debugging
+    console.error(`[tool] Error in ${name}:`, err.message, err.stack);
+    // Return generic error to avoid leaking system info (paths, stack traces, etc.)
+    return `Tool failed. Please try again or use a different approach.`;
   }
 }
 
