@@ -151,14 +151,19 @@ VOICE_SYSTEM_PROMPT=You are Grok, a helpful and maximally truthful AI built by x
 
 ## Available Tools
 
-The bot includes several agentic tools:
+The bot includes xAI's built-in tools and MCP server integrations for enhanced functionality:
 
-- **web_search**: Search the web for current information
-- **get_weather**: Get weather for a location
-- **get_time**: Get current date and time
-- **read_file**: Read project files from workspace
-- **run_command**: Execute shell commands
-- **send_discord_message**: Send messages to Discord channels
+### xAI Built-in Tools
+- **web_search**: Access current information from the web for recent events, news, and current data
+- **x_search**: Search X (Twitter) posts from authorized handles (elonmusk, xai) for real-time social media information
+- **code_execution**: Execute Python code in real-time for mathematical computations, data analysis, financial modeling, and scientific computing
+
+### MCP Server Integrations
+- **home-assistant**: Control and monitor Home Assistant smart home devices and automation
+- **gog**: Access Google services (Gmail, Calendar) through OAuth authentication
+- **xai-docs**: Search and retrieve xAI API documentation and developer resources
+
+These tools are automatically available to the AI during conversations and provide access to current information, computational capabilities, and external service integrations without requiring custom implementations.
 
 ## Usage
 

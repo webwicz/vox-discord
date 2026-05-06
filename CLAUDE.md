@@ -10,7 +10,7 @@ This file contains essential information for Claude to work effectively with the
 - Real-time voice conversations with xAI's Grok model
 - Discord voice channel integration with DAVE E2EE encryption
 - Automatic speech detection and turn-taking
-- Agentic tools for enhanced functionality
+- **xAI built-in tools**: web_search and x_search (X/Twitter) for current information access
 - Automatic reconnection on connection failures
 - Configurable voice settings and personality
 
@@ -27,12 +27,48 @@ This file contains essential information for Claude to work effectively with the
 - **Input**: Discord Opus → prism-media decoder → 48kHz stereo PCM16 → downsample to 24kHz mono PCM16 → base64 → xAI API
 - **Output**: xAI API → base64 PCM16 24kHz mono → upsample to 48kHz stereo PCM16 → Discord voice channel
 
-## Code Structure
+## xAI Tool Integration
 
-### Main Files
-- `index.js` - Main application logic, Discord client setup, voice connection handling
-- `tools.js` - Agentic tool definitions and execution logic
-- `.env` - Environment configuration (API keys, Discord settings)
+The voice bot now uses xAI's built-in tools for enhanced functionality:
+
+### Web Search Tool
+- **Type**: `web_search`
+- **Purpose**: Access current information from the web
+- **Usage**: Automatically triggered when users ask about recent events, news, or current data
+
+### X Search Tool (Twitter)
+- **Type**: `x_search`
+- **Allowed Handles**: `elonmusk`, `xai`
+- **Purpose**: Search X (Twitter) for posts from specific accounts
+- **Usage**: Provides access to real-time social media information from authorized accounts
+
+### Code Execution Tool
+- **Type**: `code_execution`
+- **Purpose**: Execute Python code in real-time for mathematical computations, data analysis, and complex calculations
+- **Capabilities**: Mathematical computations, data analysis, financial modeling, scientific computing, code generation and testing
+- **Usage**: Automatically triggered for numerical problems, data processing, and verification tasks
+
+### MCP (Model Context Protocol) Servers
+
+The bot integrates with external MCP servers for specialized functionality:
+
+#### Home Assistant MCP Server
+- **Server URL**: `http://localhost:3002`
+- **Label**: `home-assistant`
+- **Purpose**: Access and control Home Assistant smart home devices and automation
+- **Usage**: Home automation commands, device control, sensor data access
+
+#### GOG (Google OAuth Gateway) MCP Server
+- **Server URL**: `http://localhost:3003`
+- **Label**: `gog`
+- **Purpose**: Access Google services like Gmail and Calendar through OAuth
+- **Usage**: Email management, calendar operations, Google account integration
+
+#### xAI Docs MCP Server
+- **Server URL**: `https://docs.x.ai/api/mcp`
+- **Label**: `xai-docs`
+- **Purpose**: Search and retrieve xAI documentation
+- **Usage**: Access to xAI API documentation, developer resources, and technical information
 
 ### Key Classes
 - **RealtimeBridge** - Manages WebSocket connection to xAI, handles events, sends/receives audio

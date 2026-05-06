@@ -283,11 +283,36 @@ class RealtimeBridge {
       temperature: VOX_TEMPERATURE,
       input_audio_format: 'pcm16',
       output_audio_format: 'pcm16',
-      tools: toolDefinitions,
+      tools: [
+        {
+          type: 'web_search',
+        },
+        {
+          type: 'x_search'
+        },
+        {
+          type: 'code_execution'
+        },
+        {
+          type: 'mcp',
+          server_url: 'http://localhost:3002',
+          server_label: 'home-assistant',
+        },
+        {
+          type: 'mcp',
+          server_url: 'http://localhost:3003',
+          server_label: 'gog',
+        },
+        {
+          type: 'mcp',
+          server_url: 'https://docs.x.ai/api/mcp',
+          server_label: 'xai-docs',
+        },
+      ],
       turn_detection: turn_detection,
     };
 
-    console.log(`[config] tools: ${toolDefinitions.map(t => t.name).join(', ')}`);
+    console.log(`[config] tools: web_search, x_search, code_execution, mcp:home-assistant, mcp:gog, mcp:xai-docs`);
     console.log(`[config] voice: ${VOX_VOICE}, temp: ${VOX_TEMPERATURE}`);
     console.log(`[config] Sending session.update:`, JSON.stringify(sessionConfig, null, 2));
 
