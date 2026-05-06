@@ -19,7 +19,7 @@ const { opus } = require('prism-media');
 const WebSocket = require('ws');
 const { Transform, PassThrough, Readable } = require('stream');
 const { toolDefinitions, executeTool, setDiscordClient } = require('./tools');
-const { loadStartupContext, appendTranscript, getMemoryStats } = require('./openclaw-memory');
+const { loadStartupContext, appendTranscript, getMemoryStats, getWorkspaceResources } = require('./openclaw-memory');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -473,6 +473,12 @@ async function main() {
   if (context.tools) console.log('[startup] ✓ Tools reference available');
   const memStats = getMemoryStats();
   console.log(`[startup] Memory: ${memStats.totalSessions} session(s), today: ${Math.round(memStats.todaySize / 1024)}KB`);
+
+  // List available workspace resources
+  const resources = getWorkspaceResources();
+  if (resources.agents.length > 0) console.log(`[startup] Agents: ${resources.agents.join(', ')}`);
+  if (resources.repos.length > 0) console.log(`[startup] Repos: ${resources.repos.join(', ')}`);
+  if (resources.configs.length > 0) console.log(`[startup] Configs: ${resources.configs.join(', ')}`);
 
   const client = new Client({
     intents: [

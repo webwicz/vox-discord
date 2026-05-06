@@ -122,6 +122,53 @@ function getMemoryStats() {
   }
 }
 
+// List available resources in workspace (repos, config files, etc.)
+function getWorkspaceResources() {
+  try {
+    const resources = {
+      agents: [],
+      repos: [],
+      configs: [],
+    };
+
+    // List agent directories
+    const agentsPath = path.join(OPENCLAW_ROOT, 'agents');
+    if (fs.existsSync(agentsPath)) {
+      resources.agents = fs.readdirSync(agentsPath).filter(f => {
+        const stat = fs.statSync(path.join(agentsPath, f));
+        return stat.isDirectory();
+      });
+    }
+
+    // List git repos (look for .git directories)
+    const entries = fs.readdirSync(OPENCLAW_ROOT);
+    entries.forEach(entry => {
+      const fullPath = path.join(OPENCLAW_ROOT, entry);
+      try {
+        const stat = fs.lstatSync(fullPath);
+        if (stat.isDirectory() && fs.existsSync(path.join(fullPath, '.git'))) {
+          resources.repos.push(entry);
+        }
+      } catch (e) {
+        // skip unreadable entries
+      }
+    });
+
+    // List config files
+    const configFiles = ['USER.md', 'TOOLS.md', 'MEMORY.md', '.env'];
+    configFiles.forEach(file => {
+      if (fs.existsSync(path.join(OPENCLAW_ROOT, file))) {
+        resources.configs.push(file);
+      }
+    });
+
+    return resources;
+  } catch (err) {
+    console.error('[openclaw] Error listing workspace resources:', err.message);
+    return { agents: [], repos: [], configs: [] };
+  }
+}
+
 module.exports = {
   ensureDirectories,
   getTodayMemoryPath,
@@ -132,6 +179,7 @@ module.exports = {
   loadAgentConfig,
   loadStartupContext,
   getMemoryStats,
+  getWorkspaceResources,
   OPENCLAW_ROOT,
   AGENT_DIR,
   MEMORY_DIR,
