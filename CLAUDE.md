@@ -156,6 +156,7 @@ The voice bot has direct access to all OpenClaw infrastructure tools:
 - `read_file` — Read files from workspace
 - `run_command` — Execute shell commands (sandboxed)
 - `send_discord_message` — Post to Discord channels
+- `submit_task` — Submit complex tasks to background subagents
 
 ### xAI Built-in Tools
 - `web_search` — xAI's web search
@@ -184,7 +185,48 @@ The bot integrates with the **OpenClaw** persistent agent infrastructure for mem
         ├── 2026-05-06.md     # Today's conversations
         └── 2026-05-05.md     # Previous sessions
 ```
+## 🤖 Subagent Architecture
 
+Vox Discord supports **background processing** for complex, multi-step tasks through subagents. Subagents are Python scripts that run asynchronously in the OpenClaw environment.
+
+### How It Works
+
+1. **User submits complex task** via voice: *"Generate my weekly report"*
+2. **Voice bot responds immediately**: *"OK, submitting that task..."*
+3. **Task queued** to `~/.openclaw/workspace/.openclaw/vox_tasks/task_queue.jsonl`
+4. **OpenClaw spawns subagent** (Python script with full infrastructure access)
+5. **Subagent processes task** (can take minutes/hours)
+6. **Results delivered** when complete
+
+### Subagent Capabilities
+
+Subagents have **native access** to all infrastructure:
+- **MCP Servers**: Home Assistant, Google (Gmail/Calendar), Affine, Weather
+- **GitHub**: Full `gh` CLI access for repositories and issues
+- **Workspace Files**: Read/write access to project files
+- **HTTP Callbacks**: Access to voice bot's xAI tools (web search, Discord messaging)
+
+### Use Cases
+
+- **Weekly Reports**: Email + calendar + GitHub activity summaries
+- **Data Analysis**: Query databases, process results, generate documents
+- **Multi-step Automation**: Complex workflows with conditions and notifications
+- **Long-running Tasks**: Anything taking more than a few seconds
+
+### Example Workflow
+
+```
+User: "Generate my weekly report"
+Voice Bot: "Submitting that task..."
+[Task queued to JSONL file]
+[OpenClaw spawns Python subagent]
+[Subagent: reads Gmail, Calendar, GitHub]
+[Subagent: creates Affine document]
+[Subagent: sends Discord notification]
+Voice Bot: "Your report is ready in Affine!"
+```
+
+See [`SUBAGENTS.md`](./SUBAGENTS.md) for complete implementation details.
 ### Implementation
 - Module: `openclaw-memory.js` provides `loadStartupContext()`, `appendTranscript()`, and memory utilities
 - Transcripts are batched and written to disk on response completion (`response.done` events)

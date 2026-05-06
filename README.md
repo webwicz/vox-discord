@@ -38,6 +38,7 @@ Built by [Digital Forge Studios](https://dforge.ca). Free and open source.
 | 🐳 **Docker Ready** | Dockerfile included for containerized deployment |
 | 🧠 **OpenClaw Integration** | Persistent memory and context across conversations |
 | 🔍 **xAI Tools** | Built-in web search, X/Twitter search, code execution, and MCP integrations |
+| 🤖 **Subagent Architecture** | Background processing for complex multi-step tasks |
 
 ## 🏗️ Architecture
 
@@ -159,6 +160,49 @@ Vox Discord integrates with **OpenClaw** for persistent memory and context manag
         └── 2026-05-05.md     # Previous sessions
 ```
 
+## 🤖 Subagent Architecture
+
+Vox Discord supports **background processing** for complex, multi-step tasks through subagents. Subagents are Python scripts that run asynchronously in the OpenClaw environment.
+
+### How It Works
+
+1. **User submits complex task** via voice: *"Generate my weekly report"*
+2. **Voice bot responds immediately**: *"OK, submitting that task..."*
+3. **Task queued** to `~/.openclaw/workspace/.openclaw/vox_tasks/task_queue.jsonl`
+4. **OpenClaw spawns subagent** (Python script with full infrastructure access)
+5. **Subagent processes task** (can take minutes/hours)
+6. **Results delivered** when complete
+
+### Subagent Capabilities
+
+Subagents have **native access** to all infrastructure:
+- **MCP Servers**: Home Assistant, Google (Gmail/Calendar), Affine, Weather
+- **GitHub**: Full `gh` CLI access for repositories and issues
+- **Workspace Files**: Read/write access to project files
+- **HTTP Callbacks**: Access to voice bot's xAI tools (web search, Discord messaging)
+
+### Use Cases
+
+- **Weekly Reports**: Email + calendar + GitHub activity summaries
+- **Data Analysis**: Query databases, process results, generate documents
+- **Multi-step Automation**: Complex workflows with conditions and notifications
+- **Long-running Tasks**: Anything taking more than a few seconds
+
+### Example Workflow
+
+```
+User: "Generate my weekly report"
+Voice Bot: "Submitting that task..."
+[Task queued to JSONL file]
+[OpenClaw spawns Python subagent]
+[Subagent: reads Gmail, Calendar, GitHub]
+[Subagent: creates Affine document]
+[Subagent: sends Discord notification]
+Voice Bot: "Your report is ready in Affine!"
+```
+
+See [`SUBAGENTS.md`](./SUBAGENTS.md) for complete implementation details.
+
 ## 🛠️ Available Tools
 
 ### xAI Built-in Tools
@@ -177,6 +221,7 @@ Vox Discord integrates with **OpenClaw** for persistent memory and context manag
 - **Command Execution**: Run safe shell commands
 - **Weather**: Get current weather conditions
 - **Discord Messaging**: Send messages to Discord channels
+- **Task Submission**: Submit complex multi-step tasks to background subagents
 
 The bot runs agentic tools that execute shell commands and read files. Security is implemented via:
 
