@@ -72,10 +72,30 @@ function createSubagentServer() {
 
 function startSubagentServer() {
   const server = createSubagentServer();
-  server.listen(PORT, () => {
-    console.log(`[subagent-api] Server listening on localhost:${PORT}`);
-    console.log(`[subagent-api] Subagents can POST to http://localhost:${PORT}/call`);
-  });
+
+  // Try to listen on preferred port, with fallbacks if in use
+  const tryPort = (port) => {
+    return new Promise((resolve) => {
+      server.listen(port, () => {
+        console.log(`[subagent-api] ✓ Server listening on localhost:${port}`);
+        console.log(`[subagent-api] Subagents can POST to http://localhost:${port}/call`);
+        resolve(port);
+      });
+
+      server.on('error', (err) => {
+        if (err.code === 'EADDRINUSE') {
+          console.log(`[subagent-api] Port ${port} in use, trying ${port + 1}...`);
+          server.close();
+          tryPort(port + 1).then(resolve);
+        } else {
+          console.error(`[subagent-api] Server error:`, err.message);
+          resolve(null);
+        }
+      });
+    });
+  };
+
+  tryPort(PORT);
   return server;
 }
 
