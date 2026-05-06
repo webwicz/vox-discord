@@ -3,6 +3,8 @@
 
 const https = require('https');
 const http = require('http');
+const fs = require('fs');
+const path = require('path');
 const { execSync } = require('child_process');
 
 // --- Tool Definitions (OpenAI function calling format) ---
@@ -268,6 +270,30 @@ const toolDefinitions = [
         },
       },
       required: ['repo', 'number'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'submit_task',
+    description: 'Submit a complex multi-step task to a subagent. The subagent will run in the background and have access to all OpenClaw infrastructure. Use for complex workflows like reports, multi-step processes, or data analysis.',
+    parameters: {
+      type: 'object',
+      properties: {
+        task_name: {
+          type: 'string',
+          description: 'Brief name for the task (e.g., "weekly_report", "analyze_repos")',
+        },
+        description: {
+          type: 'string',
+          description: 'Detailed description of what the subagent should do',
+        },
+        priority: {
+          type: 'string',
+          description: 'Task priority: "high", "normal", or "low" (default: normal)',
+          enum: ['high', 'normal', 'low'],
+        },
+      },
+      required: ['task_name', 'description'],
     },
   },
 ];
@@ -640,6 +666,36 @@ async function executeTool(name, args) {
         return issue.comments.length > 0
           ? `${summary}\n(${issue.comments.length} comments)`
           : summary;
+      }
+
+      case 'submit_task': {
+        const taskQueueDir = path.join(WORKSPACE, '.openclaw', 'vox_tasks');
+
+        // Create queue directory if needed
+        if (!fs.existsSync(taskQueueDir)) {
+          fs.mkdirSync(taskQueueDir, { recursive: true });
+        }
+
+        // Create unique task ID
+        const taskId = `${args.task_name}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        // Create task record
+        const taskRecord = {
+          task_id: taskId,
+          task_name: args.task_name,
+          description: args.description,
+          priority: args.priority || 'normal',
+          status: 'pending',
+          created_at: new Date().toISOString(),
+          submitted_by: 'vox-discord',
+          requested_by_user: true,
+        };
+
+        // Append to queue file
+        const queueFile = path.join(taskQueueDir, 'task_queue.jsonl');
+        fs.appendFileSync(queueFile, JSON.stringify(taskRecord) + '\n', 'utf-8');
+
+        return `Task submitted: ${taskId}\nStatus: pending\nYou can check status by asking "check task status" or "what's the status of my task"`;
       }
 
       default:

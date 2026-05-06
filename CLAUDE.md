@@ -232,10 +232,28 @@ The bot integrates with the **OpenClaw** persistent agent infrastructure for mem
 - Verify tool execution works correctly
 - Test automatic reconnection after network issues
 
+## Subagents (Complex Task Handling)
+
+The voice bot can submit complex, multi-step tasks to background subagents:
+
+- **submit_task** — Submit a task for background processing
+- Subagent runs in OpenClaw Python environment with full infrastructure access
+- Subagent calls back to voice bot API (localhost:3001) for xAI-specific tools
+- Task queue: `~/.openclaw/workspace/.openclaw/vox_tasks/task_queue.jsonl`
+- Use for: Reports, data analysis, multi-step workflows, long-running operations
+
+Example: "Generate a weekly report from my emails and calendar"
+- Voice bot immediately responds: "Task submitted..."
+- Subagent processes in background
+- Voice bot tells you when complete
+
+See `SUBAGENTS.md` for full documentation and implementation guide.
+
 ## Deployment
 
 - Use provided Dockerfile for containerized deployment
 - Ensure all environment variables are set
 - Configure systemd service for automatic restarts
-- Monitor logs with `journalctl -u vox-discord.service -f`</content>
+- Monitor logs with `journalctl -u vox-discord.service -f`
+- Subagent API runs on localhost:3001 (automatically started)</content>
 <parameter name="filePath">/home/bill/vox-discord/CLAUDE.md

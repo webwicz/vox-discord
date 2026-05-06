@@ -20,6 +20,7 @@ const WebSocket = require('ws');
 const { Transform, PassThrough, Readable } = require('stream');
 const { toolDefinitions, executeTool, setDiscordClient } = require('./tools');
 const { loadStartupContext, appendTranscript, getMemoryStats, getWorkspaceResources } = require('./openclaw-memory');
+const { startSubagentServer } = require('./subagent-api');
 
 const TOKEN = process.env.DISCORD_TOKEN;
 const GUILD_ID = process.env.DISCORD_GUILD_ID;
@@ -480,6 +481,9 @@ async function main() {
   client.once('ready', async () => {
     console.log(`[discord] ${client.user.tag} is ready`);
     setDiscordClient(client);
+
+    // Start subagent HTTP API server
+    startSubagentServer();
 
     // Join voice channel (assign to global for graceful shutdown)
     voiceConnection = joinVoiceChannel({
