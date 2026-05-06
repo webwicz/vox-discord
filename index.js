@@ -507,132 +507,163 @@ async function main() {
     // Start subagent HTTP API server
     startSubagentServer();
 
-    // Join voice channel (assign to global for graceful shutdown)
-    voiceConnection = joinVoiceChannel({
-      channelId: CHANNEL_ID,
-      guildId: GUILD_ID,
-      adapterCreator: client.guilds.cache.get(GUILD_ID).voiceAdapterCreator,
-      selfDeaf: false,
-      selfMute: false,
-    });
-
-    try {
-      await entersState(voiceConnection, VoiceConnectionStatus.Ready, 15_000);
-      console.log('[discord] Voice connection ready');
-    } catch (err) {
-      console.error('[discord] Failed to join voice:', err.message);
-      process.exit(1);
-    }
-
-    // Connect to OpenAI Realtime (assign to global for graceful shutdown)
-    bridge = new RealtimeBridge();
-    await bridge.connect();
-
-    // Set up playback
-    const playback = new PlaybackStream();
-    const player = createAudioPlayer();
-    const resource = createAudioResource(playback, {
-      inputType: StreamType.Raw,
-    });
-    player.play(resource);
-    voiceConnection.subscribe(player);
-
-    // OpenAI audio → Discord playback
-    bridge.onAudioDelta = (base64Audio) => {
-      const pcm24k = Buffer.from(base64Audio, 'base64');
-      const pcm48kStereo = upsampleMono24kToStereo48k(pcm24k);
-      playback.pushAudio(pcm48kStereo);
-    };
-
-    // Discord audio → OpenAI
-    let currentSpeakerId = null;
-    let speechStartTime = null;
-    const SPEECH_MIN_DURATION = 200; // ms - minimum speech duration to avoid noise false positives
-    const SPEECH_MIN_ENERGY = 0.02; // Minimum energy threshold to detect actual speech vs noise
-
-    function calculateAudioEnergy(pcm16Buffer) {
-      // Calculate RMS energy to detect speech vs noise
-      let sum = 0;
-      for (let i = 0; i < pcm16Buffer.length; i += 2) {
-        const sample = pcm16Buffer.readInt16LE(i);
-        sum += sample * sample;
-      }
-      const rms = Math.sqrt(sum / (pcm16Buffer.length / 2));
-      return rms / 32768; // Normalize to 0-1
-    }
-
-    voiceConnection.receiver.speaking.on('start', (userId) => {
-      const receiveStartTime = Date.now();
-      console.log(`[receive] User ${userId} started speaking at ${receiveStartTime}`);
-      speechStartTime = receiveStartTime;
-
-      // Barge-in: If bot is currently playing audio, interrupt it
-      if (bridge.isPlaying && currentSpeakerId !== userId) {
-        console.log(`[barge-in] User ${userId} interrupted bot (was speaking)`);
-        bridge.interruptResponse();
-        player.stop();
-        playback.clearBuffer();
-      }
-
-      currentSpeakerId = userId;
-
-      const opusStream = voiceConnection.receiver.subscribe(userId, {
-        end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 },
-      });
-
-      // Increase max listeners to prevent memory leak warnings
-      opusStream.setMaxListeners(20);
-
-      // Handle decryption errors gracefully
-      opusStream.on('error', (error) => {
-        console.warn(`[receive] Opus stream error for user ${userId}: ${error.message}`);
-      });
-
-      const decoder = new opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
-      opusStream.pipe(decoder);
-
-      let speechEnergy = 0;
-      let sampleCount = 0;
-
-      decoder.on('data', (pcm48kStereo) => {
-        try {
-          const pcm24kMono = downsampleStereoToMono24k(pcm48kStereo);
-          const energy = calculateAudioEnergy(pcm24kMono);
-          speechEnergy += energy;
-          sampleCount++;
-
-          // Only send audio if it has sufficient energy (actual speech, not noise)
-          if (energy > SPEECH_MIN_ENERGY) {
-            const base64 = pcm24kMono.toString('base64');
-            bridge.sendAudio(base64);
-          }
-        } catch (e) {
-          // Opus decode errors are normal for first few packets
-        }
-      });
-
-      opusStream.on('end', () => {
-        const speechEndTime = Date.now();
-        const speechDuration = speechEndTime - speechStartTime;
-        const avgEnergy = sampleCount > 0 ? speechEnergy / sampleCount : 0;
-
-        console.log(`[receive] User ${userId} stopped speaking at ${speechEndTime} (duration: ${speechDuration}ms, energy: ${avgEnergy.toFixed(3)})`);
-
-        // Only commit if speech was long enough (filter out noise bursts)
-        if (speechDuration >= SPEECH_MIN_DURATION && avgEnergy > SPEECH_MIN_ENERGY) {
-          console.log(`[vad] Committing audio (${speechDuration}ms @ ${avgEnergy.toFixed(3)} energy)`);
-          bridge.commitAudio();
-        } else {
-          console.log(`[vad] Discarding short noise burst (${speechDuration}ms @ ${avgEnergy.toFixed(3)} energy)`);
-        }
-
-        currentSpeakerId = null;
-        speechStartTime = null;
-      });
-    });
-
-    console.log('[bridge] 🎤 Voice bridge active — listening and speaking');
+    console.log('[discord] Waiting for you to join the voice channel...');
   });
+
+  // Join voice channel when user joins, disconnect when user leaves
+  client.on('voiceStateUpdate', async (oldState, newState) => {
+    // Only care about our target channel
+    if (newState.channelId !== CHANNEL_ID && oldState.channelId !== CHANNEL_ID) {
+      return;
+    }
+
+    const guild = client.guilds.cache.get(GUILD_ID);
+    const voiceChannel = guild.channels.cache.get(CHANNEL_ID);
+
+    if (!voiceChannel) return;
+
+    // Count non-bot users
+    const nonBotMembers = voiceChannel.members.filter(m => !m.user.bot);
+
+    // User joined and bot is not in channel
+    if (nonBotMembers.size > 0 && !voiceConnection) {
+      console.log('[discord] User joined — joining voice channel...');
+      await setupVoiceConnection(guild);
+    }
+
+    // All users left
+    if (nonBotMembers.size === 0 && voiceConnection) {
+      console.log('[discord] All users left — disconnecting...');
+      bridge?.close();
+      voiceConnection.destroy();
+      voiceConnection = null;
+      bridge = null;
+    }
+  });
+
+  // Setup voice connection and bridge
+  async function setupVoiceConnection(guild) {
+    try {
+      voiceConnection = joinVoiceChannel({
+        channelId: CHANNEL_ID,
+        guildId: GUILD_ID,
+        adapterCreator: guild.voiceAdapterCreator,
+        selfDeaf: false,
+        selfMute: false,
+      });
+
+      await entersState(voiceConnection, VoiceConnectionStatus.Ready, 15_000);
+      console.log('[discord] ✓ Voice connection ready');
+
+      // Connect to xAI Realtime
+      bridge = new RealtimeBridge();
+      await bridge.connect();
+
+      // Set up playback
+      const playback = new PlaybackStream();
+      const player = createAudioPlayer();
+      const resource = createAudioResource(playback, {
+        inputType: StreamType.Raw,
+      });
+      player.play(resource);
+      voiceConnection.subscribe(player);
+
+      // OpenAI audio → Discord playback
+      bridge.onAudioDelta = (base64Audio) => {
+        const pcm24k = Buffer.from(base64Audio, 'base64');
+        const pcm48kStereo = upsampleMono24kToStereo48k(pcm24k);
+        playback.pushAudio(pcm48kStereo);
+      };
+
+      // Discord audio → OpenAI
+      let currentSpeakerId = null;
+      let speechStartTime = null;
+      const SPEECH_MIN_DURATION = 200;
+      const SPEECH_MIN_ENERGY = 0.02;
+
+      function calculateAudioEnergy(pcm16Buffer) {
+        let sum = 0;
+        for (let i = 0; i < pcm16Buffer.length; i += 2) {
+          const sample = pcm16Buffer.readInt16LE(i);
+          sum += sample * sample;
+        }
+        const rms = Math.sqrt(sum / (pcm16Buffer.length / 2));
+        return rms / 32768;
+      }
+
+      voiceConnection.receiver.speaking.on('start', (userId) => {
+        const receiveStartTime = Date.now();
+        console.log(`[receive] User ${userId} started speaking at ${receiveStartTime}`);
+        speechStartTime = receiveStartTime;
+
+        // Barge-in: If bot is currently playing audio, interrupt it
+        if (bridge.isPlaying && currentSpeakerId !== userId) {
+          console.log(`[barge-in] User ${userId} interrupted bot (was speaking)`);
+          bridge.interruptResponse();
+          player.stop();
+          playback.clearBuffer();
+        }
+
+        currentSpeakerId = userId;
+
+        const opusStream = voiceConnection.receiver.subscribe(userId, {
+          end: { behavior: EndBehaviorType.AfterSilence, duration: 1000 },
+        });
+
+        opusStream.setMaxListeners(20);
+
+        opusStream.on('error', (error) => {
+          console.warn(`[receive] Opus stream error for user ${userId}: ${error.message}`);
+        });
+
+        const decoder = new opus.Decoder({ rate: 48000, channels: 2, frameSize: 960 });
+        opusStream.pipe(decoder);
+
+        let speechEnergy = 0;
+        let sampleCount = 0;
+
+        decoder.on('data', (pcm48kStereo) => {
+          try {
+            const pcm24kMono = downsampleStereoToMono24k(pcm48kStereo);
+            const energy = calculateAudioEnergy(pcm24kMono);
+            speechEnergy += energy;
+            sampleCount++;
+
+            if (energy > SPEECH_MIN_ENERGY) {
+              const base64 = pcm24kMono.toString('base64');
+              bridge.sendAudio(base64);
+            }
+          } catch (e) {
+            // Opus decode errors are normal for first few packets
+          }
+        });
+
+        opusStream.on('end', () => {
+          const speechEndTime = Date.now();
+          const speechDuration = speechEndTime - speechStartTime;
+          const avgEnergy = sampleCount > 0 ? speechEnergy / sampleCount : 0;
+
+          console.log(`[receive] User ${userId} stopped speaking at ${speechEndTime} (duration: ${speechDuration}ms, energy: ${avgEnergy.toFixed(3)})`);
+
+          if (speechDuration >= SPEECH_MIN_DURATION && avgEnergy > SPEECH_MIN_ENERGY) {
+            console.log(`[vad] Committing audio (${speechDuration}ms @ ${avgEnergy.toFixed(3)} energy)`);
+            bridge.commitAudio();
+          } else {
+            console.log(`[vad] Discarding short noise burst (${speechDuration}ms @ ${avgEnergy.toFixed(3)} energy)`);
+          }
+
+          currentSpeakerId = null;
+          speechStartTime = null;
+        });
+      });
+
+      console.log('[bridge] 🎤 Voice bridge active — listening and speaking');
+    } catch (err) {
+      console.error('[discord] Failed to setup voice:', err.message);
+      voiceConnection?.destroy();
+      voiceConnection = null;
+    }
+  }
 
   client.login(TOKEN);
 }
