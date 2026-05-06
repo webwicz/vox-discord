@@ -78,6 +78,14 @@ The bot integrates with external MCP servers for specialized functionality:
 - **Capabilities**: Current weather, hourly forecasts, daily forecasts, city search by name or coordinates
 - **Usage**: Weather queries, forecasts, and location-based weather information
 
+#### Rezi MCP Server
+- **Server URL**: `http://localhost:3006`
+- **Label**: `rezi`
+- **Purpose**: Manage resumes and CVs through the Rezi Resume API
+- **Capabilities**: List resumes, read resume details, create/update resumes
+- **Usage**: Resume management, job application preparation, CV updates
+- **Requires**: Rezi Pro subscription and authenticated MCP server
+
 ### Key Classes
 - **RealtimeBridge** - Manages WebSocket connection to xAI, handles events, sends/receives audio
 - **PlaybackStream** - Custom Transform stream for audio playback to Discord
@@ -155,6 +163,12 @@ The voice bot has direct access to all OpenClaw infrastructure tools:
 - `github_search_issues` — Search issues and PRs across repos
 - `github_get_issue` — Get full details of a specific issue/PR
 - **Requires**: `gh` CLI installed and authenticated (`gh auth login`)
+
+### Rezi (Resume Management)
+- `rezi_list_resumes` — List all resumes with summaries (ID, name, job title, last updated)
+- `rezi_read_resume` — Get full resume data for a specific resume ID
+- `rezi_write_resume` — Create new resume or update existing resume
+- **Requires**: Rezi MCP server on localhost:3006 with Rezi Pro subscription
 
 ### Existing Local Tools
 - `web_search` — DuckDuckGo instant answers

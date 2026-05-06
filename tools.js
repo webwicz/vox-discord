@@ -296,6 +296,69 @@ const toolDefinitions = [
       required: ['task_name', 'description'],
     },
   },
+  {
+    type: 'function',
+    name: 'rezi_list_resumes',
+    description: 'List all resumes in your Rezi account with summaries.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    type: 'function',
+    name: 'rezi_read_resume',
+    description: 'Get the full details of a specific resume by ID.',
+    parameters: {
+      type: 'object',
+      properties: {
+        resume_id: {
+          type: 'string',
+          description: 'The resume ID to retrieve',
+        },
+      },
+      required: ['resume_id'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'rezi_write_resume',
+    description: 'Create a new resume or update an existing one. Omit resume_id to create a new resume.',
+    parameters: {
+      type: 'object',
+      properties: {
+        resume_id: {
+          type: 'string',
+          description: 'Resume ID for updates. Omit to create new resume.',
+        },
+        name: {
+          type: 'string',
+          description: 'Resume name',
+        },
+        job_title: {
+          type: 'string',
+          description: 'Target job title',
+        },
+        job_description: {
+          type: 'string',
+          description: 'Job description to tailor resume to',
+        },
+        job_company: {
+          type: 'string',
+          description: 'Target company name',
+        },
+        template: {
+          type: 'string',
+          description: 'Resume template name',
+        },
+        data: {
+          type: 'object',
+          description: 'Resume data object with sections: contact, summary, experience, education, skills, projects, certifications, etc.',
+        },
+      },
+      required: ['name', 'job_title'],
+    },
+  },
 ];
 
 // --- Tool Execution ---
@@ -696,6 +759,33 @@ async function executeTool(name, args) {
         fs.appendFileSync(queueFile, JSON.stringify(taskRecord) + '\n', 'utf-8');
 
         return `Task submitted: ${taskId}\nStatus: pending\nYou can check status by asking "check task status" or "what's the status of my task"`;
+      }
+
+      // --- Rezi Resume Management ---
+
+      case 'rezi_list_resumes': {
+        const result = await callMcpTool('http://localhost:3006', 'list_resumes', {});
+        return result;
+      }
+
+      case 'rezi_read_resume': {
+        const result = await callMcpTool('http://localhost:3006', 'read_resume', {
+          resume_id: args.resume_id,
+        });
+        return result;
+      }
+
+      case 'rezi_write_resume': {
+        const result = await callMcpTool('http://localhost:3006', 'write_resume', {
+          resume_id: args.resume_id || null,
+          name: args.name,
+          jobTitle: args.job_title,
+          jobDescription: args.job_description || '',
+          jobCompany: args.job_company || '',
+          template: args.template || 'default',
+          data: args.data || {},
+        });
+        return result;
       }
 
       default:

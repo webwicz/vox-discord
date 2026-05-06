@@ -161,6 +161,7 @@ result = client.call_tool("tool_name", arg1="value", arg2="value")
 - Affine (affine_create_doc)
 - Weather (wttr.in API)
 - GitHub (gh CLI)
+- Rezi (rezi_list_resumes, rezi_read_resume, rezi_write_resume)
 - Workspace files (read/write)
 
 **Via Voice Bot API (localhost:3001):**
@@ -168,6 +169,9 @@ result = client.call_tool("tool_name", arg1="value", arg2="value")
 - send_discord_message
 - get_weather
 - get_time
+- rezi_list_resumes
+- rezi_read_resume
+- rezi_write_resume
 
 ## Task Queue Format
 
@@ -265,12 +269,18 @@ python3 subagent_template.py
    - Process and analyze data
    - Generate visualizations in Affine
 
-3. **Multi-Step Automation**
+3. **Resume Optimization for Job Applications**
+   - List available resumes
+   - Fetch job description from email or URL
+   - Update resume tailored to specific job
+   - Post confirmation to Discord
+
+4. **Multi-Step Automation**
    - Update Home Assistant based on conditions
    - Sync data between systems
    - Trigger workflows based on status
 
-4. **Long-Running Operations**
+5. **Long-Running Operations**
    - Anything that takes >5 seconds
    - Large file processing
    - Batch operations across multiple APIs
