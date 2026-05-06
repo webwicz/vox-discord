@@ -435,46 +435,37 @@ async function callMcpTool(mcpUrl, toolName, toolArgs) {
   }
 }
 
-// Call Rezi cloud MCP API directly
+// Call Rezi MCP via local bridge (localhost:3006)
+// The bridge handles authentication with Rezi's interactive login flow
 async function callReziApi(toolName, toolArgs) {
-  const apiToken = process.env.REZI_API_TOKEN;
-  if (!apiToken) {
-    throw new Error('REZI_API_TOKEN not set. Get it from https://app.rezi.ai → Settings → Integrations');
-  }
-
   try {
     const payload = JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'tools/call',
-      params: {
-        name: toolName,
-        arguments: toolArgs,
-      },
+      tool: toolName,
+      args: toolArgs,
     });
 
     return new Promise((resolve, reject) => {
       const opts = {
-        hostname: 'api.rezi.ai',
-        path: '/mcp',
+        hostname: 'localhost',
+        port: 3006,
+        path: '/mcp/call',
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Content-Length': payload.length,
-          'Authorization': `Bearer ${apiToken}`,
         },
       };
 
-      const req = https.request(opts, (res) => {
+      const req = http.request(opts, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
             const response = JSON.parse(data);
-            if (response.result) {
-              resolve(response.result.text || JSON.stringify(response.result));
+            if (response.success && response.result) {
+              resolve(typeof response.result === 'string' ? response.result : JSON.stringify(response.result));
             } else if (response.error) {
-              reject(new Error(response.error.message));
+              reject(new Error(response.error));
             } else {
               resolve(JSON.stringify(response));
             }
@@ -484,7 +475,9 @@ async function callReziApi(toolName, toolArgs) {
         });
       });
 
-      req.on('error', reject);
+      req.on('error', (err) => {
+        reject(new Error(`Rezi MCP bridge not running on localhost:3006. Start it with: node rezi-mcp-bridge.js`));
+      });
       req.write(payload);
       req.end();
     });

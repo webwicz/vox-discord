@@ -1,0 +1,17 @@
+[Unit]
+Description=Rezi MCP Bridge - Resume API Authentication
+After=network.target
+
+[Service]
+Type=simple
+User=bill
+WorkingDirectory=/home/bill/vox-discord
+ExecStart=/usr/bin/node /home/bill/vox-discord/rezi-mcp-bridge.js
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+Environment="NODE_ENV=production"
+
+[Install]
+WantedBy=multi-user.target

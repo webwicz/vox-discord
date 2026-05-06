@@ -78,13 +78,14 @@ The bot integrates with external MCP servers for specialized functionality:
 - **Capabilities**: Current weather, hourly forecasts, daily forecasts, city search by name or coordinates
 - **Usage**: Weather queries, forecasts, and location-based weather information
 
-#### Rezi Resume API
-- **Endpoint**: `https://api.rezi.ai/mcp` (cloud-hosted)
+#### Rezi Resume Management
+- **Service**: Rezi MCP Client via local bridge on `localhost:3006`
 - **Purpose**: Manage resumes and CVs through the Rezi Resume API
 - **Capabilities**: List resumes, read resume details, create/update resumes
 - **Usage**: Resume management, job application preparation, CV updates
-- **Requires**: Rezi Pro subscription + API token
-- **Setup**: Set `REZI_API_TOKEN` environment variable from https://app.rezi.ai
+- **Requires**: Rezi Pro subscription + rezi-mcp-bridge running
+- **Auth**: Interactive browser login (one-time per bridge session)
+- **Setup**: See `REZI_SETUP.md` for installation and browser login
 
 ### Key Classes
 - **RealtimeBridge** - Manages WebSocket connection to xAI, handles events, sends/receives audio
