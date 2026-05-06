@@ -308,16 +308,11 @@ class RealtimeBridge {
           server_url: 'https://docs.x.ai/api/mcp',
           server_label: 'xai-docs',
         },
-        {
-          type: 'mcp',
-          server_url: 'http://localhost:3005',
-          server_label: 'weather',
-        },
       ],
       turn_detection: turn_detection,
     };
 
-    console.log(`[config] tools: web_search, x_search, code_execution, mcp:home-assistant, mcp:gog, mcp:xai-docs, mcp:weather`);
+    console.log(`[config] tools: web_search, x_search, code_execution, mcp:home-assistant, mcp:gog, mcp:xai-docs`);
     console.log(`[config] voice: ${VOX_VOICE}, temp: ${VOX_TEMPERATURE}`);
     console.log(`[config] model: ${sessionConfig.model}, modalities: text, audio`);
     console.log(`[config] session configured and sending to xAI`);

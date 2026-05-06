@@ -162,7 +162,6 @@ The bot includes xAI's built-in tools and MCP server integrations for enhanced f
 - **home-assistant**: Control and monitor Home Assistant smart home devices and automation
 - **gog**: Access Google services (Gmail, Calendar) through OAuth authentication
 - **xai-docs**: Search and retrieve xAI API documentation and developer resources
-- **weather**: Get current weather conditions, forecasts, and location-based weather information
 
 These tools are automatically available to the AI during conversations and provide access to current information, computational capabilities, and external service integrations without requiring custom implementations.
 

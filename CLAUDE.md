@@ -44,6 +44,11 @@ The voice bot now uses xAI's built-in tools for enhanced functionality:
 
 ### Code Execution Tool
 - **Type**: `code_execution`
+- **Purpose**: Execute Python code for calculations, data processing, and API calls
+- **Usage**: Can be used for weather queries, mathematical computations, and other programmatic tasks
+
+### Code Execution Tool
+- **Type**: `code_execution`
 - **Purpose**: Execute Python code in real-time for mathematical computations, data analysis, and complex calculations
 - **Capabilities**: Mathematical computations, data analysis, financial modeling, scientific computing, code generation and testing
 - **Usage**: Automatically triggered for numerical problems, data processing, and verification tasks
