@@ -338,16 +338,6 @@ class RealtimeBridge {
         },
         {
           type: 'mcp',
-          server_url: 'http://localhost:3002',
-          server_label: 'home-assistant',
-        },
-        {
-          type: 'mcp',
-          server_url: 'http://localhost:3003',
-          server_label: 'gog',
-        },
-        {
-          type: 'mcp',
           server_url: 'https://docs.x.ai/api/mcp',
           server_label: 'xai-docs',
         },
@@ -355,7 +345,7 @@ class RealtimeBridge {
       turn_detection: turn_detection,
     };
 
-    console.log(`[config] tools: web_search, x_search, code_execution, mcp:home-assistant, mcp:gog, mcp:xai-docs`);
+    console.log(`[config] tools: web_search, x_search, code_execution, ha_*, gmail_*, calendar_*, affine_*, github_*, mcp:xai-docs`);
     console.log(`[config] voice: ${VOX_VOICE}, temp: ${VOX_TEMPERATURE}`);
     console.log(`[config] model: ${sessionConfig.model}, modalities: text, audio`);
     console.log(`[config] session configured and sending to xAI`);

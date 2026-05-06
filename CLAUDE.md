@@ -123,6 +123,46 @@ The bot integrates with external MCP servers for specialized functionality:
 
 See `AUDIT_FINDINGS.md` for full security audit details.
 
+## Integrated Tools
+
+The voice bot has direct access to all OpenClaw infrastructure tools:
+
+### Home Assistant
+- `ha_list_entities` — List all Home Assistant devices, lights, switches, automations
+- `ha_get_state` — Check state of a specific entity (light, sensor, switch, etc.)
+- `ha_call_service` — Control devices (turn on/off lights, trigger automations, call services)
+- **Requires**: `HA_TOKEN`, `HA_HOST` (localhost), `HA_PORT` (8123)
+
+### Google Services (Gmail, Calendar)
+- `gmail_search` — Search Gmail messages by subject, sender, keywords
+- `gmail_send` — Send emails
+- `calendar_list` — List upcoming calendar events
+- **Requires**: GOG MCP server running on localhost:3003 (auto-authenticated via Google OAuth)
+
+### Affine (Documents & Notes)
+- `affine_create_doc` — Create new documents in your Affine workspace
+- **Requires**: Affine MCP server on localhost:3004 with API token
+
+### GitHub
+- `github_list_repos` — List your repositories
+- `github_search_issues` — Search issues and PRs across repos
+- `github_get_issue` — Get full details of a specific issue/PR
+- **Requires**: `gh` CLI installed and authenticated (`gh auth login`)
+
+### Existing Local Tools
+- `web_search` — DuckDuckGo instant answers
+- `get_time` — Current date/time (America/New_York timezone)
+- `get_weather` — Weather for any location (wttr.in)
+- `read_file` — Read files from workspace
+- `run_command` — Execute shell commands (sandboxed)
+- `send_discord_message` — Post to Discord channels
+
+### xAI Built-in Tools
+- `web_search` — xAI's web search
+- `x_search` — Search X/Twitter
+- `code_execution` — Run Python code
+- `mcp:xai-docs` — xAI documentation
+
 ## OpenClaw Integration
 
 The bot integrates with the **OpenClaw** persistent agent infrastructure for memory and context management:

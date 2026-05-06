@@ -96,20 +96,254 @@ const toolDefinitions = [
       required: ['channel_name', 'message'],
     },
   },
+  {
+    type: 'function',
+    name: 'ha_list_entities',
+    description: 'List all Home Assistant entities (lights, switches, sensors, automations, etc.) and their current state.',
+    parameters: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    type: 'function',
+    name: 'ha_get_state',
+    description: 'Get the current state of a specific Home Assistant entity.',
+    parameters: {
+      type: 'object',
+      properties: {
+        entity_id: {
+          type: 'string',
+          description: 'Entity ID (e.g., "light.living_room", "sensor.temperature")',
+        },
+      },
+      required: ['entity_id'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'ha_call_service',
+    description: 'Call a Home Assistant service (turn on/off lights, trigger automations, etc.).',
+    parameters: {
+      type: 'object',
+      properties: {
+        service: {
+          type: 'string',
+          description: 'Service to call (e.g., "light.turn_on", "switch.toggle", "automation.trigger")',
+        },
+        entity_id: {
+          type: 'string',
+          description: 'Target entity ID',
+        },
+        data: {
+          type: 'string',
+          description: 'Optional JSON data for the service call',
+        },
+      },
+      required: ['service', 'entity_id'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'gmail_search',
+    description: 'Search Gmail messages. Use for finding emails by subject, sender, or content.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Gmail search query (e.g., "from:john@example.com subject:urgent")',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results (default: 10)',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'gmail_send',
+    description: 'Send a Gmail message.',
+    parameters: {
+      type: 'object',
+      properties: {
+        to: {
+          type: 'string',
+          description: 'Recipient email address',
+        },
+        subject: {
+          type: 'string',
+          description: 'Email subject',
+        },
+        body: {
+          type: 'string',
+          description: 'Email body/message',
+        },
+      },
+      required: ['to', 'subject', 'body'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'calendar_list',
+    description: 'List upcoming calendar events.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Number of events to return (default: 10)',
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    name: 'affine_create_doc',
+    description: 'Create a new document in Affine workspace.',
+    parameters: {
+      type: 'object',
+      properties: {
+        title: {
+          type: 'string',
+          description: 'Document title',
+        },
+        content: {
+          type: 'string',
+          description: 'Document content (Markdown format)',
+        },
+      },
+      required: ['title', 'content'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'github_list_repos',
+    description: 'List your GitHub repositories.',
+    parameters: {
+      type: 'object',
+      properties: {
+        limit: {
+          type: 'number',
+          description: 'Maximum number of repos to return',
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    name: 'github_search_issues',
+    description: 'Search GitHub issues and pull requests across your repositories.',
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: 'Search query (e.g., "state:open label:bug")',
+        },
+        limit: {
+          type: 'number',
+          description: 'Maximum number of results',
+        },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    type: 'function',
+    name: 'github_get_issue',
+    description: 'Get details of a specific GitHub issue or pull request.',
+    parameters: {
+      type: 'object',
+      properties: {
+        repo: {
+          type: 'string',
+          description: 'Repository in format "owner/repo" (e.g., "webwicz/vox-discord")',
+        },
+        number: {
+          type: 'number',
+          description: 'Issue or PR number',
+        },
+      },
+      required: ['repo', 'number'],
+    },
+  },
 ];
 
 // --- Tool Execution ---
 
 // Simple HTTPS GET helper
-function httpGet(url) {
+function httpGet(url, headers = {}) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? https : http;
-    mod.get(url, { headers: { 'User-Agent': 'VoxIcarus/1.0' } }, (res) => {
+    const opts = {
+      headers: {
+        'User-Agent': 'VoxIcarus/1.0',
+        ...headers
+      }
+    };
+    mod.get(url, opts, (res) => {
       let data = '';
       res.on('data', (chunk) => data += chunk);
       res.on('end', () => resolve(data));
     }).on('error', reject);
   });
+}
+
+// Call localhost MCP tools directly
+async function callMcpTool(mcpUrl, toolName, toolArgs) {
+  try {
+    const payload = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: {
+        name: toolName,
+        arguments: toolArgs,
+      },
+    });
+
+    return new Promise((resolve, reject) => {
+      const url = new URL(mcpUrl);
+      const opts = {
+        hostname: url.hostname,
+        port: url.port,
+        path: '/mcp/call',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': payload.length,
+        },
+      };
+
+      const req = http.request(opts, (res) => {
+        let data = '';
+        res.on('data', chunk => data += chunk);
+        res.on('end', () => {
+          try {
+            const response = JSON.parse(data);
+            if (response.result) {
+              resolve(response.result.text || JSON.stringify(response.result));
+            } else if (response.error) {
+              reject(new Error(response.error.message));
+            } else {
+              resolve(JSON.stringify(response));
+            }
+          } catch (e) {
+            resolve(data);
+          }
+        });
+      });
+
+      req.on('error', reject);
+      req.write(payload);
+      req.end();
+    });
+  } catch (err) {
+    throw new Error(`MCP call failed: ${err.message}`);
+  }
 }
 
 // Channel name → ID map for Digital Forge server
@@ -269,6 +503,143 @@ async function executeTool(name, args) {
         }
         await channel.send(args.message);
         return `Message sent to #${args.channel_name}`;
+      }
+
+      // --- Home Assistant Integration ---
+
+      case 'ha_list_entities': {
+        const haToken = process.env.HA_TOKEN;
+        const haHost = process.env.HA_HOST || 'localhost';
+        const haPort = process.env.HA_PORT || '8123';
+        if (!haToken) return 'Home Assistant token not configured.';
+
+        const result = await httpGet(`http://${haHost}:${haPort}/api/states`, {
+          'Authorization': `Bearer ${haToken}`,
+          'Content-Type': 'application/json',
+        });
+        const entities = JSON.parse(result);
+        const summary = entities
+          .slice(0, 20)
+          .map(e => `${e.entity_id}: ${e.state}`)
+          .join('\n');
+        return `Home Assistant entities:\n${summary}\n... (${entities.length} total)`;
+      }
+
+      case 'ha_get_state': {
+        const haToken = process.env.HA_TOKEN;
+        const haHost = process.env.HA_HOST || 'localhost';
+        const haPort = process.env.HA_PORT || '8123';
+        if (!haToken) return 'Home Assistant token not configured.';
+
+        const result = await httpGet(`http://${haHost}:${haPort}/api/states/${args.entity_id}`, {
+          'Authorization': `Bearer ${haToken}`,
+        });
+        const entity = JSON.parse(result);
+        return `${args.entity_id}: ${entity.state} (${JSON.stringify(entity.attributes).substring(0, 200)})`;
+      }
+
+      case 'ha_call_service': {
+        const haToken = process.env.HA_TOKEN;
+        const haHost = process.env.HA_HOST || 'localhost';
+        const haPort = process.env.HA_PORT || '8123';
+        if (!haToken) return 'Home Assistant token not configured.';
+
+        const [domain, service] = args.service.split('.');
+        const payload = {
+          entity_id: args.entity_id,
+          ...(args.data ? JSON.parse(args.data) : {})
+        };
+
+        const url = `http://${haHost}:${haPort}/api/services/${domain}/${service}`;
+        return new Promise((resolve, reject) => {
+          const mod = http;
+          const req = mod.request(url, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${haToken}`,
+              'Content-Type': 'application/json',
+            }
+          }, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => resolve(`Service called: ${args.service}`));
+          });
+          req.on('error', reject);
+          req.write(JSON.stringify(payload));
+          req.end();
+        });
+      }
+
+      // --- Google Services via GOG MCP ---
+
+      case 'gmail_search': {
+        const result = await callMcpTool('http://localhost:3003', 'gmail_search', {
+          query: args.query,
+          limit: args.limit || 10,
+        });
+        return result;
+      }
+
+      case 'gmail_send': {
+        const result = await callMcpTool('http://localhost:3003', 'gmail_send', {
+          to: args.to,
+          subject: args.subject,
+          body: args.body,
+        });
+        return result;
+      }
+
+      case 'calendar_list': {
+        const result = await callMcpTool('http://localhost:3003', 'calendar_list', {
+          limit: args.limit || 10,
+        });
+        return result;
+      }
+
+      // --- Affine Document Creation ---
+
+      case 'affine_create_doc': {
+        const result = await callMcpTool('http://localhost:3004', 'affine_create_from_markdown', {
+          title: args.title,
+          content: args.content,
+        });
+        return result;
+      }
+
+      // --- GitHub Integration ---
+
+      case 'github_list_repos': {
+        const output = execSync('gh repo list --limit 20 --json name,description,url', {
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+        const repos = JSON.parse(output);
+        return repos.slice(0, args.limit || 10)
+          .map(r => `${r.name}: ${r.description || '(no description)'}`)
+          .join('\n');
+      }
+
+      case 'github_search_issues': {
+        const output = execSync(`gh issue list --search "${args.query}" --limit ${args.limit || 20} --json number,title,state,url`, {
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+        const issues = JSON.parse(output);
+        return issues
+          .map(i => `#${i.number} [${i.state}] ${i.title}`)
+          .join('\n');
+      }
+
+      case 'github_get_issue': {
+        const output = execSync(`gh issue view ${args.number} --repo "${args.repo}" --json number,title,state,body,comments`, {
+          encoding: 'utf-8',
+          timeout: 10000,
+        });
+        const issue = JSON.parse(output);
+        const summary = `#${issue.number} [${issue.state}] ${issue.title}\n${issue.body?.substring(0, 500) || '(no body)'}`;
+        return issue.comments.length > 0
+          ? `${summary}\n(${issue.comments.length} comments)`
+          : summary;
       }
 
       default:
