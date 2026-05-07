@@ -71,32 +71,31 @@ function createSubagentServer() {
 }
 
 function startSubagentServer() {
-  const server = createSubagentServer();
-
   // Try to listen on preferred port, with fallbacks if in use
   const tryPort = (port) => {
     return new Promise((resolve) => {
+      const server = createSubagentServer();
+
       server.listen(port, () => {
         console.log(`[subagent-api] ✓ Server listening on localhost:${port}`);
         console.log(`[subagent-api] Subagents can POST to http://localhost:${port}/call`);
-        resolve(port);
+        resolve(server);
       });
 
-      server.on('error', (err) => {
+      server.once('error', (err) => {
         if (err.code === 'EADDRINUSE') {
           console.log(`[subagent-api] Port ${port} in use, trying ${port + 1}...`);
           server.close();
           tryPort(port + 1).then(resolve);
         } else {
           console.error(`[subagent-api] Server error:`, err.message);
-          resolve(null);
+          process.exit(1);
         }
       });
     });
   };
 
-  tryPort(PORT);
-  return server;
+  return tryPort(PORT);
 }
 
 module.exports = {

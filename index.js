@@ -504,8 +504,8 @@ async function main() {
     console.log(`[discord] ${client.user.tag} is ready`);
     setDiscordClient(client);
 
-    // Start subagent HTTP API server
-    startSubagentServer();
+    // Start subagent HTTP API server (with port fallback if busy)
+    await startSubagentServer();
 
     console.log('[discord] Waiting for you to join the voice channel...');
   });
