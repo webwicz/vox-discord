@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 make g++ libopus-dev libsodium-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -u 1000 voxbot
+RUN useradd -m voxbot
 
 WORKDIR /app
 
