@@ -27,7 +27,7 @@ const GUILD_ID = process.env.DISCORD_GUILD_ID;
 const CHANNEL_ID = process.env.DISCORD_CHANNEL_ID;
 const REALTIME_ENDPOINT = process.env.OPENAI_REALTIME_ENDPOINT;
 const REALTIME_API_KEY = process.env.OPENAI_REALTIME_API_KEY;
-const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL || 'gpt-realtime-1.5';
+const REALTIME_MODEL = process.env.OPENAI_REALTIME_MODEL || 'grok-voice-latest';
 const SYSTEM_PROMPT = process.env.VOICE_SYSTEM_PROMPT || `You are Roland, a helpful voice assistant with access to various tools and services.
 
 ## Your Capabilities
