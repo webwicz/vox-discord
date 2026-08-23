@@ -3,6 +3,7 @@
 // Uses @discordjs/voice + @snazzah/davey for DAVE E2EE support
 
 require('dotenv').config();
+const fs = require('fs');
 const { Client, GatewayIntentBits } = require('discord.js');
 const {
   joinVoiceChannel,
@@ -72,6 +73,7 @@ const VOX_EAGERNESS = process.env.VOX_EAGERNESS || 'medium'; // low | medium | h
 const VOX_CREATE_RESPONSE = process.env.VOX_CREATE_RESPONSE !== 'false';
 const VOX_VOICE = process.env.VOX_VOICE || 'alloy';
 const VOX_TEMPERATURE = parseFloat(process.env.VOX_TEMPERATURE || '0.8');
+const HEARTBEAT_PATH = process.env.VOX_HEARTBEAT_PATH || '/tmp/vox-heartbeat';
 
 // --- Audio conversion helpers ---
 
@@ -117,6 +119,9 @@ class RealtimeBridge {
     this.connected = false;
     this._transcriptBuffer = ''; // Buffer for AI transcripts
     this.isPlaying = false; // Track if bot is currently speaking
+    this.reconnectAttempts = 0;
+    this.maxReconnectAttempts = 10;
+    this.baseReconnectDelay = 1000;
   }
 
   async connect() {
@@ -134,10 +139,12 @@ class RealtimeBridge {
       this.ws.on('open', () => {
         console.log('[realtime] WebSocket connected');
         this.connected = true;
+        this.reconnectAttempts = 0;
         resolve();
       });
 
       this.ws.on('message', (data) => {
+        try { fs.writeFileSync(HEARTBEAT_PATH, String(Date.now())); } catch (e) { /* non-fatal */ }
         const event = JSON.parse(data.toString());
         this.handleEvent(event);
       });
@@ -153,12 +160,18 @@ class RealtimeBridge {
 
         // Auto-reconnect unless it's a clean close (code 1000)
         if (code !== 1000) {
-          console.log('[realtime] Attempting to reconnect in 5 seconds...');
-          setTimeout(() => {
-            this.connect().catch(err => {
-              console.error('[realtime] Reconnection failed:', err.message);
-            });
-          }, 5000);
+          if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.log('[realtime] Max reconnect attempts reached, giving up');
+          } else {
+            const delay = this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts) + Math.random() * 1000;
+            console.log(`[realtime] Reconnect attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts}, retry in ${Math.round(delay)}ms`);
+            this.reconnectAttempts++;
+            setTimeout(() => {
+              this.connect().catch(err => {
+                console.error('[realtime] Reconnection failed:', err.message);
+              });
+            }, delay);
+          }
         }
       });
     });
