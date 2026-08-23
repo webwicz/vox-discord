@@ -5,7 +5,7 @@ const https = require('https');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
+const { execSync, spawn } = require('child_process');
 
 // --- Tool Definitions (OpenAI function calling format) ---
 
@@ -486,6 +486,37 @@ async function callReziApi(toolName, toolArgs) {
   }
 }
 
+// --- Safe command execution helpers ---
+
+const ALLOWED_COMMANDS = ['git', 'ls', 'pwd', 'cat', 'head', 'tail', 'grep', 'wc', 'du', 'df', 'ps', 'uptime', 'date', 'whoami', 'hostname'];
+
+function parseCommand(cmdString) {
+  const parts = cmdString.match(/[^\s"]+|"([^"]*)"/g)?.map(s => s.replace(/"/g, '')) || [];
+  return { cmd: parts[0], args: parts.slice(1) };
+}
+
+async function spawnCapture(cmd, args, opts = {}) {
+  return new Promise((resolve) => {
+    const proc = spawn(cmd, args, { timeout: 10000, shell: false, ...opts });
+    let stdout = '';
+    if (proc.stdout) {
+      proc.stdout.on('data', (data) => { stdout += data; });
+    }
+    proc.on('close', () => {
+      resolve(stdout.length > 2000 ? stdout.substring(0, 2000) + '\n[... truncated]' : stdout);
+    });
+    proc.on('error', (err) => resolve(`Error: ${err.message}`));
+  });
+}
+
+async function runCommandSafely(cmdString, cwd) {
+  const { cmd, args } = parseCommand(cmdString);
+  if (!ALLOWED_COMMANDS.includes(cmd)) {
+    return `Command not allowed: ${cmd}`;
+  }
+  return await spawnCapture(cmd, args, { cwd });
+}
+
 // Channel name → ID map for Digital Forge server
 const CHANNEL_MAP = {
   'workshop': '1480309102952583363',
@@ -606,26 +637,8 @@ async function executeTool(name, args) {
       }
 
       case 'run_command': {
-        // Safety: block destructive commands and injection vectors
-        const cmd = args.command;
-        const blocked = [
-          'rm ', 'rm\t', 'rmdir', 'mkfs', 'dd ', 'kill ', '> /', 'sudo rm',
-          '$(', '`',  // Command substitution (injection vectors)
-          'eval', 'exec ',  // Dangerous builtins
-        ];
-        if (blocked.some(b => cmd.includes(b))) {
-          return 'Blocked — destructive commands not allowed via voice.';
-        }
-        const output = execSync(cmd, {
-          timeout: 10000,
-          maxBuffer: 1024 * 100,
-          encoding: 'utf-8',
-          cwd: WORKSPACE,
-        });
-        // Truncate for voice
-        if (output.length > 2000) {
-          return output.substring(0, 2000) + '\n[... truncated]';
-        }
+        // Safety: use allowlist of safe commands and spawn with shell: false
+        const output = await runCommandSafely(args.command, WORKSPACE);
         return output || '(no output)';
       }
 
@@ -760,10 +773,8 @@ async function executeTool(name, args) {
       }
 
       case 'github_search_issues': {
-        const output = execSync(`gh issue list --search "${args.query}" --limit ${args.limit || 20} --json number,title,state,url`, {
-          encoding: 'utf-8',
-          timeout: 10000,
-        });
+        const ghArgs = ['issue', 'list', '--search', String(args.query), '--limit', String(args.limit || 20), '--json', 'number,title,state,url'];
+        const output = await spawnCapture('gh', ghArgs);
         const issues = JSON.parse(output);
         return issues
           .map(i => `#${i.number} [${i.state}] ${i.title}`)
@@ -771,10 +782,8 @@ async function executeTool(name, args) {
       }
 
       case 'github_get_issue': {
-        const output = execSync(`gh issue view ${args.number} --repo "${args.repo}" --json number,title,state,body,comments`, {
-          encoding: 'utf-8',
-          timeout: 10000,
-        });
+        const ghArgs = ['issue', 'view', String(args.number), '--repo', String(args.repo), '--json', 'number,title,state,body,comments'];
+        const output = await spawnCapture('gh', ghArgs);
         const issue = JSON.parse(output);
         const summary = `#${issue.number} [${issue.state}] ${issue.title}\n${issue.body?.substring(0, 500) || '(no body)'}`;
         return issue.comments.length > 0

@@ -328,8 +328,14 @@ class RealtimeBridge {
       voice: VOX_VOICE,
       instructions: SYSTEM_PROMPT,
       temperature: VOX_TEMPERATURE,
-      input_audio_format: 'pcm16',
-      output_audio_format: 'pcm16',
+      audio: {
+        input: {
+          format: { type: 'audio/pcm', rate: 24000 },
+        },
+        output: {
+          format: { type: 'audio/pcm', rate: 24000 },
+        },
+      },
       tools: [
         {
           type: 'web_search',
