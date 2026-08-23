@@ -83,7 +83,7 @@ https://discord.com/oauth2/authorize?client_id=YOUR_APP_ID&scope=bot&permissions
 
 | Provider | Model | Notes |
 |----------|-------|-------|
-| **xAI** | `grok-voice-think-fast-1.0` | xAI Realtime API endpoint |
+| **xAI** | `grok-voice-latest` | xAI Realtime API endpoint; current as of nested-audio-schema update (deprecated: `grok-voice-think-fast-1.0`) |
 
 ### 3. Install & Run
 
@@ -250,15 +250,12 @@ Tools are defined in `tools.js` — add your own by following the pattern.
 
 ## 💰 Cost
 
-| Model | Cost/min | 10-min chat |
-|-------|----------|-------------|
-| `gpt-realtime-mini` | ~$0.03–0.10 | ~$0.30–$1.00 |
-| `gpt-realtime-1.5` | ~$0.10–0.30 | ~$1.00–$3.00 |
+Pricing depends on xAI's current Grok voice API rates — check https://x.ai/api for current pricing rather than relying on a fixed table here.
 
 **Tips to reduce cost:**
 - Use `semantic_vad` (smarter turn detection = fewer false triggers)
 - Increase `VOX_THRESHOLD` in noisy environments
-- Use `gpt-realtime-mini` for casual conversation
+- Use `grok-voice-latest` for optimal performance
 - Keep system prompts concise (charged as input every turn)
 
 ## 🎛️ Control Panel
